@@ -65,3 +65,8 @@ communities:
     url: "https://www.etoland.co.kr/bbs/hit.php"
     enabled: true
     encoding: "euc-kr"
+
+  dvdprime:
+    name: "DVD프라임"
+    url: "https://dvdprime.com/g2/bbs/board.php?bo_table=comm"
+    enabled: true

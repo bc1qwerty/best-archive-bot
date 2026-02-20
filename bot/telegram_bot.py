@@ -29,6 +29,7 @@ from scrapers.bobaedream import BobaedreamScraper
 from scrapers.cook82 import Cook82Scraper
 from scrapers.mlbpark import MlbparkScraper
 from scrapers.etoland import EtolandScraper
+from scrapers.dvdprime import DvdprimeScraper
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ SCRAPER_SCHEDULE: list[tuple[BaseScraper, int, int]] = [
     # --- 봇 차단 주의 (30분) ---
     (FmkoreaScraper(),   30, 450),
     (EtolandScraper(),   20, 490),
+    (DvdprimeScraper(),  20, 530),
 ]
 
 # 전역 전송 큐

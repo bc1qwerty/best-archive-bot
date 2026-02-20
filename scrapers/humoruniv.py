@@ -22,14 +22,22 @@ class HumorunivScraper(BaseScraper):
             if not href or not title:
                 continue
 
+            # 추천수: width=35인 td 안의 span.o
+            votes = 0
+            rec_td = row.select_one("td[width='35'] span.o")
+            if rec_td:
+                try:
+                    votes = int(rec_td.get_text(strip=True))
+                except ValueError:
+                    pass
+
             if href.startswith("http"):
                 url = href
             elif href.startswith("/"):
                 url = f"{self.base_url}{href}"
             else:
-                # 상대 경로 (같은 디렉토리)
                 url = f"{self.base_url}/board/humor/{href}"
-            posts.append(self._make_post(title, url))
+            posts.append(self._make_post(title, url, votes))
 
         # 대체: 좀 더 넓은 셀렉터
         if not posts:

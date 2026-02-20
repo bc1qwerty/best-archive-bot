@@ -20,7 +20,16 @@ class DcinsideScraper(BaseScraper):
             href = a_tag.get("href", "")
             if not href or not title:
                 continue
+
+            votes = 0
+            rec_td = row.select_one("td.gall_recommend")
+            if rec_td:
+                try:
+                    votes = int(rec_td.get_text(strip=True))
+                except ValueError:
+                    pass
+
             url = href if href.startswith("http") else f"{self.base_url}{href}"
-            posts.append(self._make_post(title, url))
+            posts.append(self._make_post(title, url, votes))
 
         return posts

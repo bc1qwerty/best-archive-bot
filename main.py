@@ -5,7 +5,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 
 from config.settings import LOG_DIR, BOT_TOKEN, CHAT_ID
-from db.database import PostDatabase
+from db.database import post_db
 
 
 class TokenFilter(logging.Filter):
@@ -48,8 +48,7 @@ def setup_logging():
 
 
 async def init_db():
-    db = PostDatabase()
-    await db.init()
+    await post_db.init()
 
 
 def main():

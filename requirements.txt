@@ -1,6 +1,7 @@
 python-telegram-bot[job-queue]==21.10
 httpx==0.28.1
 beautifulsoup4==4.12.3
+lxml>=5.3
 aiosqlite==0.20.0
 python-dotenv==1.0.1
 pyyaml==6.0.2

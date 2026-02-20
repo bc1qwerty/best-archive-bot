@@ -1,3 +1,5 @@
+import re
+
 import httpx
 
 from scrapers.base import BaseScraper, Post
@@ -20,7 +22,23 @@ class RuliwebScraper(BaseScraper):
             href = a_tag.get("href", "")
             if not href:
                 continue
+
+            votes = 0
+            rec_td = row.select_one("td.recomd")
+            if rec_td:
+                try:
+                    votes = int(rec_td.get_text(strip=True))
+                except ValueError:
+                    pass
+
+            comments = 0
+            reply_span = row.select_one("span.num_reply")
+            if reply_span:
+                m = re.search(r"\d+", reply_span.get_text())
+                if m:
+                    comments = int(m.group())
+
             url = href if href.startswith("http") else f"{self.base_url}{href}"
-            posts.append(self._make_post(title, url))
+            posts.append(self._make_post(title, url, votes, comments=comments))
 
         return posts

@@ -68,6 +68,17 @@ class PostDatabase:
             )
             await db.commit()
 
+    async def get_today_stats(self) -> list[tuple[str, int]]:
+        """오늘 커뮤니티별 전송 건수 반환"""
+        today = datetime.now(KST).strftime("%Y-%m-%d")
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT community, COUNT(*) FROM sent_posts "
+                "WHERE sent_at >= ? GROUP BY community ORDER BY COUNT(*) DESC",
+                (today,),
+            )
+            return await cursor.fetchall()
+
     async def cleanup_old_records(self):
         """만료된 레코드 삭제"""
         cutoff = (datetime.now(KST) - timedelta(hours=RECORD_EXPIRE_HOURS)).isoformat()
@@ -78,3 +89,7 @@ class PostDatabase:
             await db.commit()
             if cursor.rowcount:
                 logger.info("만료 레코드 %d건 삭제", cursor.rowcount)
+
+
+# 모듈 수준 싱글턴 인스턴스
+post_db = PostDatabase()

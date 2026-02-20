@@ -11,7 +11,7 @@ communities:
 
   clien:
     name: "클리앙"
-    url: "https://www.clien.net/service/board/park"
+    url: "https://www.clien.net/service/group/clien_all?&od=T33"
     enabled: true
 
   ppomppu:
@@ -26,7 +26,7 @@ communities:
 
   inven:
     name: "인벤"
-    url: "https://www.inven.co.kr/board/webzine/2097"
+    url: "https://www.inven.co.kr/hot/"
     enabled: true
 
   humoruniv:
@@ -57,5 +57,11 @@ communities:
 
   mlbpark:
     name: "MLB파크"
-    url: "https://mlbpark.donga.com/mp/b.php?b=bullpen&m=bbs&s=hot"
+    url: "https://mlbpark.donga.com/mp/best.php?b=bullpen&m=like"
     enabled: true
+
+  etoland:
+    name: "이토랜드"
+    url: "https://www.etoland.co.kr/bbs/hit.php"
+    enabled: true
+    encoding: "euc-kr"

@@ -15,6 +15,9 @@ MAX_CONCURRENT_REQUESTS = 4
 REQUEST_DELAY_MIN = 1.0
 REQUEST_DELAY_MAX = 3.0
 MAX_POSTS_PER_COMMUNITY = 20
+MIN_VOTES = 50      # 추천수 필터 (0=미제공 사이트는 면제)
+MIN_VIEWS = 5000    # 조회수 필터 (추천수 없는 사이트용)
+MIN_COMMENTS = 30   # 댓글수 필터
 
 # DB 설정
 DB_PATH = BASE_DIR / "data" / "posts.db"

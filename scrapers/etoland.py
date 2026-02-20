@@ -7,8 +7,8 @@ from scrapers.base import BaseScraper, Post
 from utils.http_client import fetch_html
 
 _NUM_RE = re.compile(r"(\d[\d,]*)")
-_BO_RE = re.compile(r'g4_bo_table\s*=\s*"([^"]+)"')
-_WR_RE = re.compile(r'bo_table=\w+&wr_id=(\d+)')
+# 추천 모듈 AJAX URL에서 bo_table·wr_id 추출 (게시글 고유값)
+_GOOD_RE = re.compile(r"mw\.good\.php\?bo_table=(\w+)&wr_id=(\d+)")
 
 
 class EtolandScraper(BaseScraper):
@@ -18,20 +18,18 @@ class EtolandScraper(BaseScraper):
     encoding = "euc-kr"
 
     async def _resolve_real_url(self, client: httpx.AsyncClient, hit_url: str) -> str | None:
-        """hit.php?bn_id= 래퍼 URL → board.php 실제 URL 변환"""
+        """hit.php?bn_id= → board.php 실제 URL 변환 (모바일 호환)"""
         try:
             html = await fetch_html(client, hit_url, encoding=self.encoding, referer=self.base_url)
-            bo = _BO_RE.search(html)
-            wr = _WR_RE.search(html)
-            if bo and wr:
-                return f"{self.base_url}/bbs/board.php?bo_table={bo.group(1)}&wr_id={wr.group(1)}"
+            m = _GOOD_RE.search(html)
+            if m:
+                return f"{self.base_url}/bbs/board.php?bo_table={m.group(1)}&wr_id={m.group(2)}"
         except Exception:
             pass
         return None
 
     async def fetch_best_posts(self, client: httpx.AsyncClient) -> list[Post]:
         soup = await self._fetch_html(client, f"{self.base_url}/bbs/hit.php")
-        # 1단계: 히트 목록에서 기본 정보 수집
         raw_posts = []
         seen_bn = set()
 
@@ -88,7 +86,7 @@ class EtolandScraper(BaseScraper):
             seen_bn.add(hit_url)
             raw_posts.append((title, hit_url, votes, views, comments))
 
-        # 2단계: hit.php?bn_id= URL → board.php 실제 URL 병렬 변환
+        # hit.php?bn_id= → board.php 실제 URL 병렬 변환
         tasks = [self._resolve_real_url(client, hit_url) for _, hit_url, *_ in raw_posts]
         resolved = await asyncio.gather(*tasks)
 

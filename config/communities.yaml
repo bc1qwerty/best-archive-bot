@@ -1,0 +1,61 @@
+communities:
+  dcinside:
+    name: "DC인사이드"
+    url: "https://gall.dcinside.com/board/lists/?id=dcbest"
+    enabled: true
+
+  fmkorea:
+    name: "에펨코리아"
+    url: "https://www.fmkorea.com/best"
+    enabled: true
+
+  clien:
+    name: "클리앙"
+    url: "https://www.clien.net/service/board/park"
+    enabled: true
+
+  ppomppu:
+    name: "뽐뿌"
+    url: "https://www.ppomppu.co.kr/hot.php"
+    enabled: true
+
+  ruliweb:
+    name: "루리웹"
+    url: "https://bbs.ruliweb.com/best/selection"
+    enabled: true
+
+  inven:
+    name: "인벤"
+    url: "https://www.inven.co.kr/board/webzine/2097"
+    enabled: true
+
+  humoruniv:
+    name: "웃긴대학"
+    url: "http://web.humoruniv.com/board/humor/board_best.html"
+    enabled: true
+    encoding: "euc-kr"
+
+  theqoo:
+    name: "더쿠"
+    url: "https://theqoo.net/hot"
+    enabled: true
+
+  natepann:
+    name: "네이트판"
+    url: "https://pann.nate.com/talk/ranking"
+    enabled: true
+
+  bobaedream:
+    name: "보배드림"
+    url: "https://www.bobaedream.co.kr/list?code=best"
+    enabled: true
+
+  cook82:
+    name: "82cook"
+    url: "https://www.82cook.com/entiz/enti.php?bn=15"
+    enabled: true
+
+  mlbpark:
+    name: "MLB파크"
+    url: "https://mlbpark.donga.com/mp/b.php?b=bullpen&m=bbs&s=hot"
+    enabled: true

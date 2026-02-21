@@ -45,3 +45,10 @@ jobs:
         with:
           path: data/posts.db
           key: posts-db-${{ github.run_id }}
+
+      - name: Notify failure to Telegram
+        if: failure()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d chat_id="${ADMIN_ID}" \
+            -d text="🚨 GitHub Actions 실패%0A워크플로우: ${{ github.workflow }}%0A커밋: ${{ github.sha }}%0A로그: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

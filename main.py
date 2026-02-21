@@ -58,6 +58,10 @@ async def init_db():
 
 def _check_single_instance(logger):
     """Named Mutex로 다중 실행 방지 (Windows 전용)"""
+    if sys.platform != "win32":
+        logger.info("비-Windows 환경, Named Mutex 스킵")
+        return
+
     import ctypes
     global _mutex_handle  # GC 방지 — 프로세스 종료 시 OS가 자동 해제
 

@@ -1,0 +1,47 @@
+name: Best Archive Bot
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: best-archive-bot
+  cancel-in-progress: false
+
+jobs:
+  scrape-and-send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    env:
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      CHAT_ID: ${{ secrets.CHAT_ID }}
+      ADMIN_ID: ${{ secrets.ADMIN_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore DB cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/posts.db
+          key: posts-db-${{ github.run_id }}
+          restore-keys: posts-db-
+
+      - name: Run bot (one-shot)
+        run: python run_once.py
+
+      - name: Save DB cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/posts.db
+          key: posts-db-${{ github.run_id }}

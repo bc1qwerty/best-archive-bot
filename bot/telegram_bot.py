@@ -7,11 +7,10 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import httpx
-from telegram import Bot, LinkPreviewOptions
+from telegram import Bot, LinkPreviewOptions, Update
 from telegram.error import RetryAfter
 from telegram.ext import Application, ContextTypes
 
-from bot.admin_commands import register_admin_commands
 from bot.formatter import format_single_post
 from config.settings import ADMIN_ID, BASE_DIR, BOT_TOKEN, CHAT_ID, SEND_INTERVAL
 from db.database import post_db
@@ -222,7 +221,7 @@ async def scrape_one_community(context: ContextTypes.DEFAULT_TYPE):
         return
     except httpx.HTTPStatusError as e:
         code = e.response.status_code
-        if code in (403, 429):
+        if code in (403, 429, 430):
             minutes = 30 if code == 403 else 10
             _backoff_until[key] = datetime.now(KST) + timedelta(minutes=minutes)
             logger.warning("[%s] HTTP %d → %d분 백오프", name, code, minutes)
@@ -252,12 +251,16 @@ async def scrape_one_community(context: ContextTypes.DEFAULT_TYPE):
         logger.exception("[%s] DB 오류", name)
         return
 
-    # 인메모리 캐시로 2차 필터 (DB mark_sent 실패 대비)
+    # 인메모리 캐시로 2차 필터 (큐 대기 중 + DB mark_sent 실패 대비)
     unsent = [p for p in unsent if p.url not in _sent_urls]
 
     if not unsent:
         logger.info("[%s] 새 게시글 없음", name)
         return
+
+    # 큐 적재 전에 인메모리 캐시에 즉시 등록 (다음 스크래핑 주기 중복 방지)
+    for p in unsent:
+        _sent_urls.add(p.url)
 
     _interleave_into_queue(unsent)
     logger.info("[%s] %d개 큐 적재 (큐 대기: %d)", name, len(unsent), len(_send_queue))
@@ -338,6 +341,22 @@ async def cleanup_job(context: ContextTypes.DEFAULT_TYPE):
         logger.info("인메모리 sent 캐시 초기화 (5000건 초과)")
 
 
+# ── 에러 핸들러 ──
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    """전역 에러 핸들러 — Conflict 등 polling 오류를 조용히 처리"""
+    from telegram.error import Conflict, NetworkError, TimedOut
+
+    err = context.error
+    if isinstance(err, Conflict):
+        logger.warning("Conflict 오류 (중복 인스턴스 가능성): %s", err)
+        return
+    if isinstance(err, (NetworkError, TimedOut)):
+        logger.warning("네트워크 오류: %s", err)
+        return
+    logger.error("처리되지 않은 오류: %s", err, exc_info=context.error)
+
+
 # ── 앱 생성 ──
 
 async def _post_init(app: Application):
@@ -363,11 +382,11 @@ def create_application() -> Application:
             scraper.community_name, interval_min, first_sec,
         )
 
-    # 전송 큐 소비: 5초마다 1건
+    # 전송 큐 소비
     job_queue.run_repeating(sender_job, interval=SEND_INTERVAL, first=15, name="sender")
 
-    # 관리 명령어 등록
-    register_admin_commands(app)
+    # 전역 에러 핸들러 등록
+    app.add_error_handler(error_handler)
 
     # DB 정리: 매시간
     job_queue.run_repeating(cleanup_job, interval=3600, first=3600, name="cleanup")

@@ -93,10 +93,11 @@ class EtolandScraper(BaseScraper):
         posts = []
         seen_url = set()
         for (title, hit_url, votes, views, comments), real_url in zip(raw_posts, resolved):
-            url = real_url or hit_url  # 변환 실패 시 원본 유지
-            if url not in seen_url:
-                seen_url.add(url)
-                posts.append(self._make_post(title, url, votes=votes, views=views,
+            if not real_url:
+                continue  # 변환 실패 → 스킵 (다음 주기에 재시도, hit_url 사용 방지)
+            if real_url not in seen_url:
+                seen_url.add(real_url)
+                posts.append(self._make_post(title, real_url, votes=votes, views=views,
                                              comments=comments))
 
         return posts

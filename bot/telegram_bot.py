@@ -13,7 +13,7 @@ from telegram.ext import Application, ContextTypes
 
 from bot.admin_commands import register_admin_commands
 from bot.formatter import format_single_post
-from config.settings import ADMIN_ID, BASE_DIR, BOT_TOKEN, CHAT_ID
+from config.settings import ADMIN_ID, BASE_DIR, BOT_TOKEN, CHAT_ID, SEND_INTERVAL
 from db.database import post_db
 from scrapers.base import BaseScraper, Post
 from scrapers.dcinside import DcinsideScraper
@@ -65,6 +65,7 @@ SCRAPER_SCHEDULE: list[tuple[BaseScraper, int, int]] = [
 _send_queue: deque[Post] = deque()
 _send_retry: dict[str, int] = {}  # url → 재시도 횟수
 MAX_SEND_RETRY = 3
+_sent_urls: set[str] = set()  # 인메모리 전송 완료 캐시 (DB 실패 대비 2차 방어)
 
 # 연속 실패 카운터 / 마지막 성공 시각 / 백오프
 _fail_count: dict[str, int] = {}
@@ -72,7 +73,6 @@ _last_success: dict[str, datetime] = {}
 _backoff_until: dict[str, datetime] = {}  # 커뮤니티별 백오프 만료 시각
 FAIL_ALERT_THRESHOLD = 3
 HEALTH_CHECK_MINUTES = 30
-SEND_INTERVAL = 5
 _last_queue_len: int = 0  # 직전 백업 시 큐 길이
 
 
@@ -108,17 +108,24 @@ def _save_queue():
         logger.warning("큐 백업 실패")
 
 
-def _load_queue():
-    """시작 시 백업된 큐 복원"""
+async def _load_queue():
+    """시작 시 백업된 큐 복원 (DB 검증으로 이미 전송된 게시물 제외)"""
     if not QUEUE_BACKUP_PATH.exists():
         return
     try:
         data = json.loads(QUEUE_BACKUP_PATH.read_text(encoding="utf-8"))
-        for item in data:
-            _send_queue.append(Post(**item))
+        restored = [Post(**item) for item in data]
         QUEUE_BACKUP_PATH.unlink()
-        if data:
-            logger.info("큐 복원: %d건", len(data))
+        if not restored:
+            return
+        # DB로 이미 전송된 게시물 필터링
+        try:
+            restored = await post_db.filter_unsent(restored)
+        except Exception:
+            logger.warning("큐 복원 DB 검증 실패, 전체 복원")
+        for p in restored:
+            _send_queue.append(p)
+        logger.info("큐 복원: %d건 (원본 %d건)", len(restored), len(data))
     except Exception:
         logger.warning("큐 복원 실패")
 
@@ -162,10 +169,11 @@ async def sender_job(context: ContextTypes.DEFAULT_TYPE):
             ),
         )
         _send_retry.pop(post.url, None)
+        _sent_urls.add(post.url)  # DB 실패해도 메모리에서 중복 차단
         try:
             await post_db.mark_sent([post])
         except Exception:
-            logger.warning("[%s] DB mark_sent 오류", post.community_name)
+            logger.warning("[%s] DB mark_sent 오류 (인메모리 캐시로 중복 방지)", post.community_name)
     except Exception:
         retries = _send_retry.get(post.url, 0) + 1
         if retries < MAX_SEND_RETRY:
@@ -244,6 +252,9 @@ async def scrape_one_community(context: ContextTypes.DEFAULT_TYPE):
         logger.exception("[%s] DB 오류", name)
         return
 
+    # 인메모리 캐시로 2차 필터 (DB mark_sent 실패 대비)
+    unsent = [p for p in unsent if p.url not in _sent_urls]
+
     if not unsent:
         logger.info("[%s] 새 게시글 없음", name)
         return
@@ -316,21 +327,27 @@ async def queue_backup_job(context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cleanup_job(context: ContextTypes.DEFAULT_TYPE):
-    """매시간 오래된 DB 레코드 정리"""
+    """매시간 오래된 DB 레코드 정리 + 인메모리 캐시 제한"""
     try:
         await post_db.cleanup_old_records()
     except Exception:
         logger.warning("DB cleanup 오류")
+    # 인메모리 캐시가 과도하게 커지면 비움 (DB가 주 방어선)
+    if len(_sent_urls) > 5000:
+        _sent_urls.clear()
+        logger.info("인메모리 sent 캐시 초기화 (5000건 초과)")
 
 
 # ── 앱 생성 ──
 
+async def _post_init(app: Application):
+    """앱 초기화 후 큐 복원"""
+    await _load_queue()
+
+
 def create_application() -> Application:
     """텔레그램 봇 Application 생성"""
-    # 백업된 큐 복원
-    _load_queue()
-
-    app = Application.builder().token(BOT_TOKEN).build()
+    app = Application.builder().token(BOT_TOKEN).post_init(_post_init).build()
     job_queue = app.job_queue
 
     for scraper, interval_min, first_sec in SCRAPER_SCHEDULE:

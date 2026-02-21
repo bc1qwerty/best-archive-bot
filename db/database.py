@@ -1,7 +1,7 @@
 import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urldefrag
+from urllib.parse import urldefrag, urlparse, urlencode, parse_qsl
 
 import aiosqlite
 
@@ -36,8 +36,18 @@ class PostDatabase:
 
     @staticmethod
     def _hash_url(url: str) -> str:
-        clean_url, _ = urldefrag(url)  # fragment(#...) 제거
-        return hashlib.sha256(clean_url.encode()).hexdigest()
+        """URL 정규화 후 해시 — 같은 게시글이 다른 URL 형태로 중복 인식되는 것 방지"""
+        clean_url, _ = urldefrag(url)
+        parsed = urlparse(clean_url)
+        # 프로토콜 통일 (http → https)
+        scheme = "https"
+        # trailing slash 제거 + 소문자 호스트
+        path = parsed.path.rstrip("/") or "/"
+        host = parsed.hostname or ""
+        # 쿼리 파라미터 정렬 (순서 차이로 인한 해시 불일치 방지)
+        query = urlencode(sorted(parse_qsl(parsed.query)))
+        normalized = f"{scheme}://{host}{path}?{query}" if query else f"{scheme}://{host}{path}"
+        return hashlib.sha256(normalized.encode()).hexdigest()
 
     async def filter_unsent(self, posts: list) -> list:
         """이미 전송된 게시글 필터링, 미전송 게시글만 반환"""

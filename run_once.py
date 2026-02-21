@@ -23,7 +23,7 @@ from scrapers.base import Post
 logger = logging.getLogger(__name__)
 
 SEND_DELAY = 3.0       # 전송 간격 (초) — 분당 ~20건
-MAX_SEND_PER_RUN = 50   # 1회 최대 전송 건수
+MAX_SEND_PER_RUN = 10   # 1회 최대 전송 건수
 MAX_SEND_RETRY = 2      # 전송 실패 재시도 횟수
 SCRAPE_TIMEOUT = 60      # 스크래퍼 개별 타임아웃 (초)
 
@@ -90,6 +90,7 @@ async def send_posts(bot: Bot, posts: list[Post]) -> int:
                 await bot.send_message(
                     chat_id=CHAT_ID,
                     text=msg,
+                    disable_notification=True,
                     link_preview_options=LinkPreviewOptions(
                         prefer_large_media=True,
                         show_above_text=False,

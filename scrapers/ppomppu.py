@@ -23,7 +23,13 @@ class PpomppuScraper(BaseScraper):
                 if cat in ("렌탈업체", "뽐뿌스폰서", "가전견적상담", "휴대폰업체"):
                     continue
 
-            a_tag = row.select_one(".baseList-title a")
+            # a 태그 자체가 baseList-title 클래스를 가짐 (썸네일+텍스트 2개 존재)
+            a_tags = row.select("a.baseList-title")
+            a_tag = None
+            for a in a_tags:
+                if a.get_text(strip=True):
+                    a_tag = a
+                    break
             if not a_tag:
                 continue
             title = a_tag.get_text(strip=True)

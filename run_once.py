@@ -16,7 +16,7 @@ from telegram.error import RetryAfter
 
 from config.settings import BOT_TOKEN, CHAT_ID
 from bot.formatter import format_single_post
-from bot.telegram_bot import SCRAPER_SCHEDULE
+from scrapers.schedule import SCRAPER_SCHEDULE
 from db.database import post_db
 from scrapers.base import Post
 

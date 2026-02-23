@@ -2,7 +2,6 @@
 
 from scrapers.base import BaseScraper
 from scrapers.dcinside import DcinsideScraper
-from scrapers.fmkorea import FmkoreaScraper
 from scrapers.clien import ClienScraper
 from scrapers.ppomppu import PpomppuScraper
 from scrapers.ruliweb import RuliwebScraper
@@ -34,8 +33,8 @@ SCRAPER_SCHEDULE: list[tuple[BaseScraper, int, int]] = [
     (Cook82Scraper(),    20, 370),
     (HumorunivScraper(), 20, 410),
 
-    # --- 봇 차단 주의 (30분) ---
-    (FmkoreaScraper(),   30, 450),
-    (EtolandScraper(),   20, 490),
-    (DvdprimeScraper(),  20, 530),
+    # --- 봇 차단 주의 ---
+    # FmkoreaScraper: 비활성화 (클라우드 IP WAF 차단)
+    (EtolandScraper(),   20, 450),
+    (DvdprimeScraper(),  20, 490),
 ]

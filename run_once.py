@@ -8,7 +8,9 @@
 
 import asyncio
 import logging
+import random
 import sys
+from collections import defaultdict
 
 import httpx
 from telegram import Bot, LinkPreviewOptions
@@ -69,6 +71,39 @@ async def scrape_all() -> list[Post]:
     return all_posts
 
 
+def interleave_posts(posts: list[Post]) -> list[Post]:
+    """커뮤니티별 라운드로빈으로 게시글을 섞어 같은 커뮤니티가 연속되지 않도록 한다."""
+    if len(posts) <= 1:
+        return posts
+
+    # 커뮤니티별 그룹핑
+    by_community: dict[str, list[Post]] = defaultdict(list)
+    for p in posts:
+        by_community[p.community].append(p)
+
+    # 각 커뮤니티 내부 순서를 랜덤으로 섞기
+    for group in by_community.values():
+        random.shuffle(group)
+
+    # 글이 많은 커뮤니티 순으로 정렬 (균등 분산 효과)
+    buckets = sorted(by_community.values(), key=len, reverse=True)
+
+    # 라운드로빈: 각 버킷에서 1개씩 순서대로 꺼냄
+    result: list[Post] = []
+    idx = 0
+    while buckets:
+        # 아직 남은 버킷만 유지
+        buckets = [b for b in buckets if b]
+        if not buckets:
+            break
+        bucket = buckets[idx % len(buckets)]
+        result.append(bucket.pop(0))
+        idx += 1
+
+    logger.info("큐 인터리빙 완료: %d건 (%d개 커뮤니티)", len(result), len(by_community))
+    return result
+
+
 async def send_posts(bot: Bot, posts: list[Post]) -> int:
     """미전송 게시글을 순차 전송, 성공 건수 반환."""
     if not posts:
@@ -110,10 +145,18 @@ async def send_posts(bot: Bot, posts: list[Post]) -> int:
                     await asyncio.sleep(SEND_DELAY)
 
         if success:
-            try:
-                await post_db.mark_sent([post])
-            except Exception:
-                logger.warning("[%s] mark_sent 실패: %s", post.community_name, post.url)
+            # DB 기록 실패 시 재시도 (실패하면 다음 실행에서 중복 발송됨)
+            for db_attempt in range(1, 4):
+                try:
+                    await post_db.mark_sent([post])
+                    break
+                except Exception:
+                    logger.warning(
+                        "[%s] mark_sent 실패 (%d/3): %s",
+                        post.community_name, db_attempt, post.url,
+                    )
+                    if db_attempt < 3:
+                        await asyncio.sleep(1)
             sent_count += 1
             await asyncio.sleep(SEND_DELAY)
         else:
@@ -140,9 +183,10 @@ async def main():
     # 스크래핑
     all_posts = await scrape_all()
 
-    # 미전송분 필터링
+    # 미전송분 필터링 → 커뮤니티 인터리빙
     unsent = await post_db.filter_unsent(all_posts)
     logger.info("미전송 게시글: %d건", len(unsent))
+    unsent = interleave_posts(unsent)
 
     # 전송
     bot = Bot(token=BOT_TOKEN)

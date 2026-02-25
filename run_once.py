@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 SEND_DELAY = 3.0       # 전송 간격 (초) — 분당 ~20건
 MAX_SEND_PER_RUN = 10   # 1회 최대 전송 건수
+BACKLOG_CAP = 20        # 미전송 백로그 상한 (초과분은 스킵 처리)
 MAX_SEND_RETRY = 2      # 전송 실패 재시도 횟수
 SCRAPE_TIMEOUT = 60      # 스크래퍼 개별 타임아웃 (초)
 
@@ -187,6 +188,13 @@ async def main():
     unsent = await post_db.filter_unsent(all_posts)
     logger.info("미전송 게시글: %d건", len(unsent))
     unsent = interleave_posts(unsent)
+
+    # 백로그 제한: 초과분은 DB에 전송 처리하여 재등장 방지
+    if len(unsent) > BACKLOG_CAP:
+        skipped = unsent[BACKLOG_CAP:]
+        unsent = unsent[:BACKLOG_CAP]
+        await post_db.mark_sent(skipped)
+        logger.warning("백로그 초과: %d건 스킵 처리", len(skipped))
 
     # 전송
     bot = Bot(token=BOT_TOKEN)

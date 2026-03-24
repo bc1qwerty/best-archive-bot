@@ -1,0 +1,73 @@
+name: Best Archive Bot
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: best-archive-bot
+  cancel-in-progress: false
+
+jobs:
+  scrape-and-send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    env:
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      CHAT_ID: ${{ secrets.CHAT_ID }}
+      ADMIN_ID: ${{ secrets.ADMIN_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 연속 실패 감지: 최근 5회 모두 실패면 워크플로우 자동 비활성화
+      - name: Check consecutive failures
+        id: check-failures
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FAILURES=$(gh run list --workflow=bot.yml --limit=5 --json conclusion \
+            --jq '[.[] | select(.conclusion == "failure")] | length')
+          echo "consecutive_failures=$FAILURES" >> "$GITHUB_OUTPUT"
+          if [ "$FAILURES" -ge 5 ]; then
+            echo "🛑 5회 연속 실패 감지 — 워크플로우를 자동 비활성화합니다."
+            gh workflow disable bot.yml
+            # 관리자에게 알림
+            curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+              -d chat_id="${ADMIN_ID}" \
+              -d text="🛑 best-archive-bot 자동 비활성화%0A5회 연속 실패로 워크플로우를 중단했습니다.%0A확인 후 수동으로 재활성화하세요.%0Agh workflow enable bot.yml"
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore DB cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/posts.db
+          key: posts-db-${{ github.run_id }}
+          restore-keys: posts-db-
+
+      - name: Run bot (one-shot)
+        run: python run_once.py
+
+      - name: Save DB cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/posts.db
+          key: posts-db-${{ github.run_id }}
+
+      - name: Notify failure to Telegram
+        if: failure() && steps.check-failures.outputs.consecutive_failures < 5
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d chat_id="${ADMIN_ID}" \
+            -d text="🚨 GitHub Actions 실패%0A워크플로우: ${{ github.workflow }}%0A커밋: ${{ github.sha }}%0A로그: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

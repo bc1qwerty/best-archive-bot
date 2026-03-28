@@ -1,8 +1,0 @@
-[project]
-name = "best-archive-bot"
-version = "1.0.0"
-description = "한국 커뮤니티 베스트 게시물 텔레그램 봇"
-requires-python = ">=3.11"
-
-[tool.ruff]
-line-length = 120

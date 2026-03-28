@@ -5,3 +5,6 @@ __pycache__/
 data/*.db
 logs/*.log
 .claude/
+
+# Go binary
+best-archive-bot-go

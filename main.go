@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
@@ -30,6 +31,7 @@ func main() {
 	log.SetOutput(os.Stdout)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmsgprefix)
 	log.Println("=== run_once 시작 ===")
+	notifyhub.LogPush("best-archive-bot", "info", "run started", "")
 
 	// Determine base directory (where main.go lives)
 	exe, err := os.Executable()
@@ -90,6 +92,7 @@ func main() {
 	// Send posts
 	sent := sendPosts(postDB, unsent)
 	log.Printf("=== run_once 완료: %d건 전송 ===", sent)
+	notifyhub.LogPush("best-archive-bot", "info", "run finished", fmt.Sprintf("sent=%d", sent))
 }
 
 // scraperList returns all enabled scrapers.

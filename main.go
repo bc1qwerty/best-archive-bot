@@ -14,6 +14,7 @@ import (
 	"github.com/bc1qwerty/best-archive-bot/internal/config"
 	"github.com/bc1qwerty/best-archive-bot/internal/db"
 	"github.com/bc1qwerty/best-archive-bot/internal/scraper"
+	"github.com/bc1qwerty/best-archive-bot/internal/notifyhub"
 	"github.com/bc1qwerty/best-archive-bot/internal/telegram"
 )
 
@@ -238,6 +239,17 @@ func sendPosts(postDB *db.PostDB, posts []scraper.Post) int {
 		if err != nil {
 			log.Printf("[%s] 전송 최종 실패: %s", post.CommunityName, post.Title)
 			continue
+		}
+
+		// Push to notification hub
+		if err := notifyhub.Push(notifyhub.Payload{
+			ChannelID: "best-archive",
+			Title:     post.Title,
+			Body:      post.CommunityName,
+			URL:       post.URL,
+			Category:  post.CommunityName,
+		}); err != nil {
+			log.Printf("[%s] hub push 실패: %v", post.CommunityName, err)
 		}
 
 		// Mark as sent with retry

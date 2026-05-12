@@ -109,6 +109,10 @@ func main() {
 		OnError: func(err error) {
 			_ = notifyhub.LogPush("best-archive-bot", "error", err.Error(), "")
 		},
+		OnPollComplete: func(ctx context.Context, n int) error {
+			return notifyhub.LogPush("best-archive-bot", "info",
+				fmt.Sprintf("poll complete (%d items)", n), "")
+		},
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)

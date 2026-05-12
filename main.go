@@ -77,7 +77,10 @@ func main() {
 		log.Fatalf("Telegram init: %v", err)
 	}
 
-	dbPath := filepath.Join(baseDir, "data", "best-archive.db")
+	// GHA cache restores the legacy file as data/posts.db; honor it so
+	// bot_seen survives the rename. New deploys without cache create
+	// data/best-archive.db.
+	dbPath := resolveDBPath(baseDir)
 	st, err := store.Open(dbPath, "best-archive")
 	if err != nil {
 		log.Fatalf("framework store open: %v", err)
@@ -132,6 +135,20 @@ func resolveBaseDir() string {
 // archiveDir resolves the raw-JSONL backup directory. ARCHIVE_DIR env
 // overrides; otherwise <baseDir>/data/archive so behavior is uniform
 // across hosts (office, dell, acer, VPS) without hardcoded paths.
+// resolveDBPath honors DB_PATH env first, then the legacy posts.db
+// filename used by the GHA workflow cache, then falls back to the new
+// hyphenated convention.
+func resolveDBPath(baseDir string) string {
+	if v := os.Getenv("DB_PATH"); v != "" {
+		return v
+	}
+	legacy := filepath.Join(baseDir, "data", "posts.db")
+	if _, err := os.Stat(legacy); err == nil {
+		return legacy
+	}
+	return filepath.Join(baseDir, "data", "best-archive.db")
+}
+
 func archiveDir(baseDir string) string {
 	if v := os.Getenv("ARCHIVE_DIR"); v != "" {
 		return v

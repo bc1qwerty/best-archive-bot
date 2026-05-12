@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
+    inputs:
+      bootstrap:
+        description: "First-deploy bootstrap (mark all items seen, skip dispatch)"
+        type: boolean
+        default: false
 
 concurrency:
   group: best-archive-bot
@@ -20,6 +25,7 @@ jobs:
       ADMIN_ID: ${{ secrets.ADMIN_ID }}
       NOTIFICATION_HUB_URL: ${{ secrets.NOTIFICATION_HUB_URL }}
       NOTIFICATION_SECRET: ${{ secrets.NOTIFICATION_SECRET }}
+      BOOTSTRAP_DEDUP: ${{ github.event.inputs.bootstrap == 'true' && '1' || '' }}
 
     steps:
       - uses: actions/checkout@v4

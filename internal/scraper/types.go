@@ -88,3 +88,22 @@ func (b *baseScraper) filterPosts(posts []Post) []Post {
 	}
 	return result
 }
+
+// AllScrapers returns a slice of all implemented community scrapers.
+func AllScrapers() []Scraper {
+	return []Scraper{
+		NewBobaedreamScraper(),
+		NewClienScraper(),
+		NewCook82Scraper(),
+		NewDcinsideScraper(),
+		NewDvdprimeScraper(),
+		NewEtolandScraper(),
+		NewHumorunivScraper(),
+		NewInvenScraper(),
+		NewMlbparkScraper(),
+		NewNatepannScraper(),
+		NewPpomppuScraper(),
+		NewRuliwebScraper(),
+		NewTheqooScraper(),
+	}
+}

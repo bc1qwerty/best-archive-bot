@@ -89,14 +89,20 @@ func (b *baseScraper) filterPosts(posts []Post) []Post {
 	return result
 }
 
-// AllScrapers returns a slice of all implemented community scrapers.
+// AllScrapers returns a slice of the active community scrapers.
+//
+// dvdprime is intentionally omitted: dvdprime.com rate-limits GitHub Actions'
+// datacenter IP range and returns HTTP 429 on nearly every run (verified
+// 2026-05-20 — 13/15 runs failed, while the same request from a Korean
+// residential IP returns 200). Retrying inside the run reuses the same blocked
+// IP, so it does not help. NewDvdprimeScraper and dvdprime.go are kept so the
+// source can be restored in one line if the bot ever moves to a Korean-IP host.
 func AllScrapers() []Scraper {
 	return []Scraper{
 		NewBobaedreamScraper(),
 		NewClienScraper(),
 		NewCook82Scraper(),
 		NewDcinsideScraper(),
-		NewDvdprimeScraper(),
 		NewEtolandScraper(),
 		NewHumorunivScraper(),
 		NewInvenScraper(),

@@ -34,10 +34,20 @@ type baseScraper struct {
 	dataRequired  bool // if true, posts with 0/0/0 stats are filtered out
 }
 
-// makePost creates a Post with html-unescaped title.
+// normalizeTitle unescapes HTML entities then collapses every run of
+// whitespace -- newlines, tabs, indentation, and NBSP from layout markup --
+// into a single space. Scrapers read titles via goquery Selection.Text(),
+// which concatenates nested text nodes verbatim; sites whose title anchor
+// wraps nested markup (e.g. ruliweb's "flex" anchor, humoruniv) would
+// otherwise keep embedded newlines and indentation inside the title.
+func normalizeTitle(s string) string {
+	return strings.Join(strings.Fields(html.UnescapeString(s)), " ")
+}
+
+// makePost creates a Post with a whitespace-normalized, html-unescaped title.
 func (b *baseScraper) makePost(title, url string, votes, views, comments int) Post {
 	return Post{
-		Title:         html.UnescapeString(strings.TrimSpace(title)),
+		Title:         normalizeTitle(title),
 		URL:           url,
 		Community:     b.community,
 		CommunityName: b.communityName,

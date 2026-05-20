@@ -3,7 +3,6 @@ package scraper
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -34,66 +33,37 @@ func (s *HumorunivScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 	}
 
 	var posts []Post
+	seen := make(map[string]bool)
 
-	// Primary: table.list_table tr with a[href*='read.html']
-	doc.Find("table.list_table tr").Each(func(_ int, row *goquery.Selection) {
-		aTag := row.Find("a[href*='read.html']").First()
-		if aTag.Length() == 0 {
+	// Each post title lives in <span id="title_chk_<table>-<number>">. The
+	// enclosing <a> also wraps the comment-count span (.list_comment_num)
+	// and a vote span, so reading the anchor text would fold
+	// "[77] 답글추천 +481" into the title -- read the title span directly.
+	doc.Find("span[id^='title_chk_']").Each(func(_ int, titleSpan *goquery.Selection) {
+		title := strings.TrimSpace(titleSpan.Text())
+		if title == "" {
 			return
 		}
-		title := strings.TrimSpace(aTag.Text())
-		href, exists := aTag.Attr("href")
-		if !exists || href == "" || title == "" {
+		href, exists := titleSpan.Closest("a[href*='read.html']").Attr("href")
+		if !exists || href == "" {
 			return
-		}
-
-		// Votes: td[width='35'] span.o
-		votes := 0
-		recSpan := row.Find("td[width='35'] span.o").First()
-		if recSpan.Length() > 0 {
-			if v, err := strconv.Atoi(strings.TrimSpace(recSpan.Text())); err == nil {
-				votes = v
-			}
 		}
 
 		var url string
-		if strings.HasPrefix(href, "http") {
+		switch {
+		case strings.HasPrefix(href, "http"):
 			url = href
-		} else if strings.HasPrefix(href, "/") {
+		case strings.HasPrefix(href, "/"):
 			url = s.baseURL + href
-		} else {
+		default:
 			url = s.baseURL + "/board/humor/" + href
 		}
-		posts = append(posts, s.makePost(title, url, votes, 0, 0))
+		if seen[url] {
+			return
+		}
+		seen[url] = true
+		posts = append(posts, s.makePost(title, url, 0, 0, 0))
 	})
-
-	// Fallback: broader selector if primary yields nothing
-	if len(posts) == 0 {
-		seen := make(map[string]bool)
-		doc.Find("a[href]").Each(func(_ int, aTag *goquery.Selection) {
-			href, _ := aTag.Attr("href")
-			if !strings.Contains(href, "read.html") {
-				return
-			}
-			title := strings.TrimSpace(aTag.Text())
-			if title == "" || len(title) < 2 {
-				return
-			}
-
-			var url string
-			if strings.HasPrefix(href, "http") {
-				url = href
-			} else if strings.HasPrefix(href, "/") {
-				url = s.baseURL + href
-			} else {
-				url = s.baseURL + "/board/humor/" + href
-			}
-			if !seen[url] {
-				seen[url] = true
-				posts = append(posts, s.makePost(title, url, 0, 0, 0))
-			}
-		})
-	}
 
 	return s.filterPosts(posts), nil
 }

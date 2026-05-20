@@ -42,9 +42,16 @@ func (s *RuliwebScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 		if aTag.Length() == 0 {
 			return
 		}
-		title := strings.TrimSpace(aTag.Text())
+		// Title is the .text_over element (a <span> in list rows, a
+		// <strong> in best_top rows). The anchor also wraps a rank badge
+		// and the .num_reply count, so aTag.Text() would fold both into
+		// the title. Fall back to the full text if the markup changes.
+		title := strings.TrimSpace(aTag.Find(".text_over").First().Text())
+		if title == "" {
+			title = strings.TrimSpace(aTag.Text())
+		}
 		href, exists := aTag.Attr("href")
-		if !exists || href == "" {
+		if !exists || href == "" || title == "" {
 			return
 		}
 

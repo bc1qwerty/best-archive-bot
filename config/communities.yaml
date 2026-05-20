@@ -66,7 +66,11 @@ communities:
     enabled: true
     encoding: "euc-kr"
 
+  # Disabled 2026-05-20: dvdprime.com returns HTTP 429 to GitHub Actions'
+  # datacenter IPs on nearly every run. The operative switch is the
+  # AllScrapers() slice in internal/scraper/types.go (this enabled flag is
+  # not yet read by the scraper layer); both are kept consistent here.
   dvdprime:
     name: "DVD프라임"
     url: "https://dvdprime.com/g2/bbs/board.php?bo_table=comm"
-    enabled: true
+    enabled: false

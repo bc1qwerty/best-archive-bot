@@ -25,6 +25,12 @@ const (
 	runTimeout = 5 * time.Minute
 	// maxSendPerRun limits total dispatched items per cron invocation.
 	maxSendPerRun = 10
+	// hubChannel is the txid notification-hub channel slug. It is NOT the
+	// Telegram chat id: the hub keys notifications by logical channel,
+	// while Telegram delivery is handled separately by the framework
+	// Notifier. It doubles as the framework bot name and store namespace
+	// so all three stay in sync.
+	hubChannel = "best-archive"
 )
 
 // ArchiveFormatter renders a community best-post as Telegram HTML.
@@ -81,14 +87,14 @@ func main() {
 	// bot_seen survives the rename. New deploys without cache create
 	// data/best-archive.db.
 	dbPath := resolveDBPath(baseDir)
-	st, err := store.Open(dbPath, "best-archive")
+	st, err := store.Open(dbPath, hubChannel)
 	if err != nil {
 		log.Fatalf("framework store open: %v", err)
 	}
 	_ = st.Subscribe(config.ChatID)
 
 	runner := bot.New(bot.Config{
-		Name:            "best-archive",
+		Name:            hubChannel,
 		Source:          interleaved,
 		Formatter:       &ArchiveFormatter{},
 		Notifier:        ntf,
@@ -100,7 +106,7 @@ func main() {
 		BootstrapMode:   os.Getenv("BOOTSTRAP_DEDUP") == "1",
 		OnNewItem: func(ctx context.Context, item core.Item) error {
 			return notifyhub.Push(notifyhub.Payload{
-				ChannelID: config.ChatID,
+				ChannelID: hubChannel,
 				Title:     item.Title,
 				URL:       item.URL,
 				Category:  item.Category,

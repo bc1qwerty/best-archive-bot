@@ -1,0 +1,32 @@
+name: Keepalive
+
+# GitHub은 저장소에 60일간 커밋/푸시가 없으면 schedule 워크플로우를 자동
+# 비활성화한다(예약 실행 자체는 활동으로 세지 않음). 한 달에 한 번 타임스탬프
+# 커밋을 남겨 그 타이머를 리셋해 bot.yml이 계속 살아있게 한다.
+on:
+  schedule:
+    - cron: '17 3 1 * *'   # 매월 1일 03:17 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bump keepalive timestamp and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .keepalive
+          git add .keepalive
+          git commit -m "chore(ci): keepalive to prevent 60-day inactivity disable"
+          git push

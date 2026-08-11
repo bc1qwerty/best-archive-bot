@@ -11,6 +11,7 @@ import (
 	"github.com/bc1qwerty/best-archive-bot/internal/config"
 	"github.com/bc1qwerty/best-archive-bot/internal/db"
 	"github.com/bc1qwerty/best-archive-bot/internal/notifyhub"
+	"github.com/bc1qwerty/best-archive-bot/internal/persist"
 	"github.com/bc1qwerty/best-archive-bot/internal/scraper"
 	"github.com/bc1qwerty/best-archive-bot/internal/source"
 	"github.com/bc1qwerty/txid-bot-framework/pkg/bot"
@@ -91,6 +92,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("framework store open: %v", err)
 	}
+	// The store opens in WAL mode; on this one-shot run the dedup writes
+	// otherwise stay in the "-wal" sidecar, which the GHA cache does not
+	// snapshot. Checkpoint into the main .db (and close) before exit so
+	// bot_seen survives to the next run.
+	defer func() {
+		if err := persist.Checkpoint(st.DB()); err != nil {
+			log.Printf("wal checkpoint warning: %v", err)
+		}
+		if err := st.Close(); err != nil {
+			log.Printf("store close warning: %v", err)
+		}
+	}()
 	_ = st.Subscribe(config.ChatID)
 
 	runner := bot.New(bot.Config{

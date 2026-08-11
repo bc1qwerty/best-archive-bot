@@ -77,7 +77,12 @@ jobs:
       - name: Restore DB cache
         uses: actions/cache/restore@v4
         with:
-          path: data/posts.db
+          # Include the WAL sidecars so dedup state survives even if a run
+          # exits before its checkpoint folds the WAL into the main .db.
+          path: |
+            data/posts.db
+            data/posts.db-wal
+            data/posts.db-shm
           key: posts-db-${{ github.run_id }}
           restore-keys: posts-db-
 
@@ -88,7 +93,10 @@ jobs:
         if: always()
         uses: actions/cache/save@v4
         with:
-          path: data/posts.db
+          path: |
+            data/posts.db
+            data/posts.db-wal
+            data/posts.db-shm
           key: posts-db-${{ github.run_id }}
 
       - name: Notify failure to Telegram

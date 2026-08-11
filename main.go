@@ -26,6 +26,11 @@ const (
 	runTimeout = 5 * time.Minute
 	// maxSendPerRun limits total dispatched items per cron invocation.
 	maxSendPerRun = 10
+	// maxPerCommunity caps how many posts a single community contributes to
+	// one run. Because each community's posts are popularity-sorted upstream,
+	// this keeps its hottest few and prevents one busy community (e.g. a game
+	// board mid-drama) from monopolizing a batch.
+	maxPerCommunity = 3
 	// hubChannel is the txid notification-hub channel slug. It is NOT the
 	// Telegram chat id: the hub keys notifications by logical channel,
 	// while Telegram delivery is handled separately by the framework
@@ -78,6 +83,7 @@ func main() {
 		sources = append(sources, source.NewAdapter(s))
 	}
 	interleaved := source.NewInterleavingSource(sources...)
+	interleaved.MaxPerSource = maxPerCommunity
 
 	ntf, err := notify.NewTelegram(config.BotToken)
 	if err != nil {

@@ -35,6 +35,13 @@ func (s *DcinsideScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 
 	var posts []Post
 	doc.Find("tr.ub-content").Each(func(_ int, row *goquery.Selection) {
+		// Keep only real numbered posts. Notice/survey/ad rows carry a
+		// non-numeric marker ("공지", "설문", "AD") in the number column.
+		num := strings.TrimSpace(row.Find("td.gall_num").First().Text())
+		if !isAllDigits(num) {
+			return
+		}
+
 		// Title link: td.gall_tit a (not .reply_numbox)
 		aTag := row.Find("td.gall_tit a").Not(".reply_numbox").First()
 		if aTag.Length() == 0 {

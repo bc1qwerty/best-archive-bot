@@ -81,11 +81,55 @@ func (b *baseScraper) shouldInclude(p Post) bool {
 	return false
 }
 
-// filterPosts applies URL validation, popularity filter, and max-posts limit.
+// noticePrefixes are bracketed admin tags that mark board notices rather
+// than user posts. Real community/gallery tags (e.g. [싱갤], [유머]) never
+// use these words, so matching them is safe.
+var noticePrefixes = []string{
+	"[공지]", "【공지】", "[안내]", "[필독]", "[이벤트]", "[운영]", "[알림]",
+}
+
+// isNoticeTitle reports whether a title looks like a board notice/announcement
+// rather than a real post. It is intentionally conservative — bracketed admin
+// tags plus a couple of unambiguous phrases — so it does not drop genuine
+// popular posts. Per-scraper DOM markers (dcinside num, clien/theqoo classes)
+// remain the primary defense; this is a cross-community safety net.
+func isNoticeTitle(title string) bool {
+	compact := strings.ReplaceAll(title, " ", "")
+	for _, p := range noticePrefixes {
+		if strings.HasPrefix(compact, p) {
+			return true
+		}
+	}
+	if strings.Contains(compact, "갤러리이용안내") || strings.Contains(compact, "운영원칙") {
+		return true
+	}
+	return false
+}
+
+// isAllDigits reports whether s is non-empty and consists only of ASCII
+// digits. Used to keep only real numbered posts on list pages whose notice
+// / survey / ad rows carry a non-numeric marker in the number column.
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// filterPosts applies URL validation, notice/popularity filters, and the
+// max-posts limit.
 func (b *baseScraper) filterPosts(posts []Post) []Post {
 	var result []Post
 	for _, p := range posts {
 		if !strings.HasPrefix(p.URL, "http") {
+			continue
+		}
+		if isNoticeTitle(p.Title) {
 			continue
 		}
 		if !b.shouldInclude(p) {

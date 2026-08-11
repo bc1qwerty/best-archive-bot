@@ -32,12 +32,19 @@ func (a *ScraperAdapter) Fetch(ctx context.Context) ([]core.Item, error) {
 		return nil, err
 	}
 
+	// Hottest-first within this community so the interleaving source and the
+	// per-poll cap select each community's best posts before its weaker ones.
+	sortByPopularity(posts)
+
 	var items []core.Item
 	for _, p := range posts {
+		// Canonicalize so the same post reached via different list pages or
+		// tracking params dedups to a single bot_seen entry.
+		u := NormalizeURL(p.URL)
 		items = append(items, core.Item{
-			ID:       p.URL,
+			ID:       u,
 			Title:    p.Title,
-			URL:      p.URL,
+			URL:      u,
 			Category: p.CommunityName,
 		})
 	}

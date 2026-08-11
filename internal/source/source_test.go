@@ -96,6 +96,40 @@ func (f fakeSource) Fetch(context.Context) ([]core.Item, error) {
 	return f.items, nil
 }
 
+func TestInterleave_MaxPerSourceCaps(t *testing.T) {
+	// Source A is popularity-sorted upstream, so items are hottest-first.
+	a := fakeSource{name: "A", items: []core.Item{
+		{ID: "a1", Title: "A1"}, {ID: "a2", Title: "A2"}, {ID: "a3", Title: "A3"},
+		{ID: "a4", Title: "A4"}, {ID: "a5", Title: "A5"},
+	}}
+	b := fakeSource{name: "B", items: []core.Item{
+		{ID: "b1", Title: "B1"}, {ID: "b2", Title: "B2"},
+	}}
+
+	src := NewInterleavingSource(a, b)
+	src.MaxPerSource = 3
+	out, err := src.Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("Fetch error: %v", err)
+	}
+
+	countA := 0
+	for _, it := range out {
+		if it.ID[0] == 'a' {
+			countA++
+		}
+		if it.ID == "a4" || it.ID == "a5" {
+			t.Errorf("item beyond cap present: %s", it.ID)
+		}
+	}
+	if countA != 3 {
+		t.Errorf("source A contributed %d items, want 3", countA)
+	}
+	if len(out) != 5 { // 3 from A + 2 from B
+		t.Errorf("total %d, want 5: %+v", len(out), out)
+	}
+}
+
 func TestInterleave_DedupsCrossPostTitles(t *testing.T) {
 	a := fakeSource{name: "A", items: []core.Item{
 		{ID: "a1", Title: "가수 청하", URL: "a1"},

@@ -57,11 +57,22 @@ func (s *InterleavingSource) Fetch(ctx context.Context) ([]core.Item, error) {
 	}
 
 	out := make([]core.Item, 0)
+	seenTitle := make(map[string]bool)
 	for i := 0; i < maxLen; i++ {
 		for _, b := range buckets {
-			if i < len(b) {
-				out = append(out, b[i])
+			if i >= len(b) {
+				continue
 			}
+			// Drop exact cross-posts: the identical headline appearing in
+			// more than one community collapses to its first (highest
+			// round-robin priority = hottest) occurrence.
+			if key := normalizeTitleKey(b[i].Title); key != "" {
+				if seenTitle[key] {
+					continue
+				}
+				seenTitle[key] = true
+			}
+			out = append(out, b[i])
 		}
 	}
 

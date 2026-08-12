@@ -77,7 +77,27 @@ func (s *InterleavingSource) Fetch(ctx context.Context) ([]core.Item, error) {
 	}
 
 	if len(errs) > 0 {
-		return out, errors.Join(errs...)
+		joined := errors.Join(errs...)
+		// Korean community sites block GitHub Actions' datacenter IPs
+		// intermittently (RST during handshake, header timeout), and the
+		// in-run retries reuse the same blocked IP so they cannot help. As
+		// long as some other community still returned posts, the run is
+		// degraded rather than broken — flag it so the caller can log it
+		// below error level instead of paging on routine upstream blocking.
+		if len(out) > 0 {
+			return out, &PartialFetchError{Err: joined}
+		}
+		return out, joined
 	}
 	return out, nil
 }
+
+// PartialFetchError wraps sub-source failures that occurred on a fetch which
+// still produced items.
+type PartialFetchError struct {
+	Err error
+}
+
+func (e *PartialFetchError) Error() string { return e.Err.Error() }
+
+func (e *PartialFetchError) Unwrap() error { return e.Err }

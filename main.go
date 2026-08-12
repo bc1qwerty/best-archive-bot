@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -132,7 +133,16 @@ func main() {
 			})
 		},
 		OnError: func(err error) {
-			_ = notifyhub.LogPush("best-archive-bot", "error", err.Error(), "")
+			// A run where some communities failed but others delivered is
+			// warn-level: it must stay visible in the central log without
+			// showing up in dash.txid.uk's Recent Errors, which only lists
+			// error/fatal and should mean "something needs attention".
+			level := "error"
+			var partial *source.PartialFetchError
+			if errors.As(err, &partial) {
+				level = "warn"
+			}
+			_ = notifyhub.LogPush("best-archive-bot", level, err.Error(), "")
 		},
 		OnPollComplete: func(ctx context.Context, n int) error {
 			return notifyhub.LogPush("best-archive-bot", "info",

@@ -99,19 +99,42 @@ jobs:
       #   복구 방법은 "이번 판을 버리는 것" 이다. BOOTSTRAP_DEDUP=1 로 돌리면 크롤한
       #   글을 **발송 없이** 전부 seen 처리하고 끝낸다. 한 주기(3시간) 분량의 글을
       #   놓치지만, 그 대신 대량 중복 발송도 조용한 유실도 없다. 다음 실행부터 정상.
+      #   판정은 cache-hit 출력이 아니라 **DB 안의 행 수**로 한다. restore-keys 로
+      #   부분일치하면 cache-hit 은 false 이고, 반대로 스키마만 든 껍데기 DB 가
+      #   복원되면 파일은 존재하는데 dedup 은 꺼져 있다(safety_alarm 에서 실제로
+      #   250바이트 캐시가 그렇게 몇 주를 갔다). 쓸 수 있는 상태인지를 직접 본다.
+      #
+      #   ⚠ "판정 실패" 와 "0행" 을 구분한다. sqlite3 가 없어졌을 때 0행으로 뭉뚱그리면
+      #   매 실행이 부트스트랩이 되어 **봇이 영구히 조용해진다** — 막으려던 유실보다
+      #   나쁘다. 판정 불능이면 정상으로 두고 그 사실을 알린다.
       - name: Detect dedup cache loss
         id: dedup-state
         run: |
-          if [ -s data/posts.db ]; then
-            echo "bootstrap=0" >> "$GITHUB_OUTPUT"
+          DB=data/posts.db
+          if ! command -v sqlite3 >/dev/null 2>&1; then
+            BOOT=0; REASON="sqlite3 가 없어 판정 불능 — 이번엔 정상으로 두지만 유실 감시가 꺼져 있다"; LEVEL=warn
+          elif [ ! -s "$DB" ]; then
+            BOOT=1; REASON="DB 파일이 없거나 비어 있다(matched-key='${{ steps.restore-db.outputs.cache-matched-key }}')"; LEVEL=loss
+          elif ! ROWS=$(sqlite3 "$DB" 'SELECT COUNT(*) FROM bot_seen;' 2>/dev/null); then
+            BOOT=1; REASON="bot_seen 조회 실패 — 스키마가 깨졌다"; LEVEL=loss
+          elif [ "$ROWS" -eq 0 ]; then
+            BOOT=1; REASON="bot_seen 0행 — 껍데기 캐시가 복원됐다"; LEVEL=loss
           else
-            echo "bootstrap=1" >> "$GITHUB_OUTPUT"
-            echo "::warning::dedup DB 캐시가 없다(matched-key='${{ steps.restore-db.outputs.cache-matched-key }}') — 이번 실행은 발송 없이 dedup 재수립만 한다."
-            curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-              -d chat_id="${ADMIN_ID}" \
-              -d text="🟠 best-archive dedup 캐시 유실%0A이번 실행은 발송 없이 재수립만 합니다(글 한 주기 누락).%0A반복되면 캐시 대신 영속 저장소를 검토하세요.%0A로그: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-              > /dev/null || true
+            BOOT=0; REASON="bot_seen ${ROWS}행 — 정상"; LEVEL=ok
           fi
+          echo "bootstrap=$BOOT" >> "$GITHUB_OUTPUT"
+          echo "판정: $REASON (bootstrap=$BOOT)"
+          [ "$LEVEL" = ok ] && exit 0
+          echo "::warning::$REASON"
+          if [ "$LEVEL" = loss ]; then
+            TEXT="🟠 best-archive dedup 캐시 유실%0A${REASON}%0A이번 실행은 발송 없이 재수립만 합니다(글 한 주기 누락).%0A반복되면 캐시 대신 영속 저장소를 검토하세요."
+          else
+            TEXT="🟠 best-archive dedup 감시 불능%0A${REASON}"
+          fi
+          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d chat_id="${ADMIN_ID}" \
+            -d text="${TEXT}%0A로그: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            > /dev/null || true
 
       - name: Run bot (one-shot)
         run: BOOTSTRAP_DEDUP=${{ steps.dedup-state.outputs.bootstrap }} ./best-archive-bot

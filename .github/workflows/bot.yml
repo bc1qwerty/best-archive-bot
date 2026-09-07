@@ -75,6 +75,7 @@ jobs:
         run: go build -o best-archive-bot .
 
       - name: Restore DB cache
+        id: restore-db
         uses: actions/cache/restore@v4
         with:
           # Include the WAL sidecars so dedup state survives even if a run
@@ -86,8 +87,34 @@ jobs:
           key: posts-db-${{ github.run_id }}
           restore-keys: posts-db-
 
+      # ⚠ dedup 상태의 유일한 사본이 GitHub Actions 캐시다. 캐시가 축출되면
+      #   (7일 미접근, 리포 10GB 초과, 수동 삭제) `data/posts.db` 가 없는 채로
+      #   봇이 뜨고, 프레임워크는 빈 DB 를 보고 **크롤한 글 전부를 신규로** 판정한다.
+      #   그 다음이 문제다 — MaxItemsPerPoll 을 넘는 분량은 발송 없이 seen 처리돼
+      #   **영구 유실**된다(2026-09-08 safety_alarm 에서 실제로 7건이 그렇게 사라졌다.
+      #   거기서는 방아쇠가 낡은 바이너리였고, 여기서는 인프라 이벤트라는 차이뿐이다).
+      #   게다가 캐시 미스는 job 실패가 아니라서 아래 Telegram 경보도 안 울린다 —
+      #   조용히 유실되고 아무도 모른다.
+      #
+      #   복구 방법은 "이번 판을 버리는 것" 이다. BOOTSTRAP_DEDUP=1 로 돌리면 크롤한
+      #   글을 **발송 없이** 전부 seen 처리하고 끝낸다. 한 주기(3시간) 분량의 글을
+      #   놓치지만, 그 대신 대량 중복 발송도 조용한 유실도 없다. 다음 실행부터 정상.
+      - name: Detect dedup cache loss
+        id: dedup-state
+        run: |
+          if [ -s data/posts.db ]; then
+            echo "bootstrap=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "bootstrap=1" >> "$GITHUB_OUTPUT"
+            echo "::warning::dedup DB 캐시가 없다(matched-key='${{ steps.restore-db.outputs.cache-matched-key }}') — 이번 실행은 발송 없이 dedup 재수립만 한다."
+            curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+              -d chat_id="${ADMIN_ID}" \
+              -d text="🟠 best-archive dedup 캐시 유실%0A이번 실행은 발송 없이 재수립만 합니다(글 한 주기 누락).%0A반복되면 캐시 대신 영속 저장소를 검토하세요.%0A로그: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+              > /dev/null || true
+          fi
+
       - name: Run bot (one-shot)
-        run: ./best-archive-bot
+        run: BOOTSTRAP_DEDUP=${{ steps.dedup-state.outputs.bootstrap }} ./best-archive-bot
 
       - name: Save DB cache
         if: always()

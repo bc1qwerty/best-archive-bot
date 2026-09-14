@@ -27,6 +27,14 @@ func (a *ScraperAdapter) Name() string {
 }
 
 func (a *ScraperAdapter) Fetch(ctx context.Context) ([]core.Item, error) {
+	// ctx 는 스크레이퍼 HTTP 계층(FetchBestPosts/fetchHTML)에 전파되지 않고,
+	// 개별 요청은 client 의 30s Timeout 으로만 묶인다. 그래서 5분 run 예산이
+	// 이미 소진됐으면 여기서 멈춰 DeadlineExceeded 를 그대로 올린다 — 진행 중인
+	// 스크레이퍼는 못 끊지만, 남은 커뮤니티를 계속 긁으며 예산 초과를 무음으로
+	// 지나치는 것은 막고, framework 의 «예산 초과» 경보 경로가 살아난다.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	posts, err := a.scraper.FetchBestPosts(a.client)
 	if err != nil {
 		return nil, err

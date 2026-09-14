@@ -1,6 +1,7 @@
 package scraper
 
 import (
+	"fmt"
 	"html"
 	"net/http"
 	"strings"
@@ -141,6 +142,19 @@ func (b *baseScraper) filterPosts(posts []Post) []Post {
 		}
 	}
 	return result
+}
+
+// finish validates the raw (pre-filter) scrape, then applies filterPosts.
+// These boards always carry posts, so zero rows before any filtering means
+// the list selector no longer matches — a layout change or an anti-bot page
+// served as HTTP 200 — and must surface as an error instead of a silently
+// empty (and green) run. Filtering down to zero afterwards (popularity
+// thresholds) remains a normal empty result.
+func (b *baseScraper) finish(posts []Post) ([]Post, error) {
+	if len(posts) == 0 {
+		return nil, fmt.Errorf("%s: 목록 셀렉터 0행 — 레이아웃 변경/안티봇 의심", b.communityName)
+	}
+	return b.filterPosts(posts), nil
 }
 
 // AllScrapers returns a slice of the active community scrapers.

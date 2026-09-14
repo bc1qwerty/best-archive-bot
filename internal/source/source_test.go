@@ -2,7 +2,10 @@ package source
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/bc1qwerty/best-archive-bot/internal/scraper"
 	"github.com/bc1qwerty/txid-bot-framework/pkg/core"
@@ -89,11 +92,12 @@ func TestSortByPopularity_ZeroMetricsStable(t *testing.T) {
 type fakeSource struct {
 	name  string
 	items []core.Item
+	err   error
 }
 
 func (f fakeSource) Name() string { return f.name }
 func (f fakeSource) Fetch(context.Context) ([]core.Item, error) {
-	return f.items, nil
+	return f.items, f.err
 }
 
 func TestInterleave_MaxPerSourceCaps(t *testing.T) {
@@ -155,5 +159,76 @@ func TestInterleave_DedupsCrossPostTitles(t *testing.T) {
 		if out[i].ID != id {
 			t.Errorf("item %d = %q, want %q", i, out[i].ID, id)
 		}
+	}
+}
+
+func TestInterleave_AllSourcesFailedIsTotalFetchError(t *testing.T) {
+	a := fakeSource{name: "A", err: errors.New("blocked")}
+	b := fakeSource{name: "B", err: errors.New("layout changed")}
+
+	src := NewInterleavingSource(a, b)
+	out, err := src.Fetch(context.Background())
+	if len(out) != 0 {
+		t.Fatalf("got %d items, want 0", len(out))
+	}
+	var total *TotalFetchError
+	if !errors.As(err, &total) {
+		t.Fatalf("err = %v, want *TotalFetchError", err)
+	}
+	var partial *PartialFetchError
+	if errors.As(err, &partial) {
+		t.Errorf("total failure must not be a PartialFetchError")
+	}
+}
+
+func TestInterleave_SomeSourcesFailedIsPartial(t *testing.T) {
+	a := fakeSource{name: "A", items: []core.Item{{ID: "a1", Title: "A1"}}}
+	b := fakeSource{name: "B", err: errors.New("blocked")}
+
+	src := NewInterleavingSource(a, b)
+	out, err := src.Fetch(context.Background())
+	if len(out) != 1 {
+		t.Fatalf("got %d items, want 1", len(out))
+	}
+	var partial *PartialFetchError
+	if !errors.As(err, &partial) {
+		t.Fatalf("err = %v, want *PartialFetchError", err)
+	}
+}
+
+// budgetScraper records whether it was actually invoked.
+type budgetScraper struct{ called bool }
+
+func (s *budgetScraper) Name() string { return "budget" }
+func (s *budgetScraper) FetchBestPosts(client *http.Client) ([]scraper.Post, error) {
+	s.called = true
+	return []scraper.Post{{Title: "t", URL: "https://example.com/1"}}, nil
+}
+
+// 예산(ctx) 소진 후의 Fetch 는 스크레이핑을 시작하지 않고 ctx 오류를 그대로
+// 올려야 한다 — framework 의 예산 초과 경보 경로가 이 오류에 의존한다.
+func TestAdapter_ExpiredBudgetStopsFetch(t *testing.T) {
+	sc := &budgetScraper{}
+	a := NewAdapter(sc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
+	defer cancel()
+	<-ctx.Done()
+
+	items, err := a.Fetch(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("want DeadlineExceeded, got %v", err)
+	}
+	if sc.called {
+		t.Fatal("scraper must not run after the budget is spent")
+	}
+	if len(items) != 0 {
+		t.Fatalf("want no items, got %d", len(items))
+	}
+
+	// 예산이 살아 있으면 정상 동작.
+	items, err = a.Fetch(context.Background())
+	if err != nil || len(items) != 1 || !sc.called {
+		t.Fatalf("live budget fetch failed: items=%d err=%v called=%v", len(items), err, sc.called)
 	}
 }

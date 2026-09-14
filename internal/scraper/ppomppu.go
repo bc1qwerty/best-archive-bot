@@ -110,5 +110,5 @@ func (s *PpomppuScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 		}
 	})
 
-	return s.filterPosts(posts), nil
+	return s.finish(posts)
 }

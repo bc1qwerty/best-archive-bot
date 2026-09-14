@@ -42,7 +42,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          FAILURES=$(gh run list --workflow=bot.yml --limit=5 --json conclusion \
+          FAILURES=$(gh run list --workflow=bot.yml --status completed --limit=5 --json conclusion \
             --jq '[.[] | select(.conclusion == "failure")] | length')
           echo "consecutive_failures=$FAILURES" >> "$GITHUB_OUTPUT"
           if [ "$FAILURES" -ge 5 ]; then
@@ -136,8 +136,14 @@ jobs:
             -d text="${TEXT}%0A로그: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             > /dev/null || true
 
+      # 감지가 유실(1)을 봤을 때만 덮어쓴다 — 0을 무조건 주입하면 수동
+      # dispatch 의 bootstrap 입력(job env)이 조용히 무시된다.
       - name: Run bot (one-shot)
-        run: BOOTSTRAP_DEDUP=${{ steps.dedup-state.outputs.bootstrap }} ./best-archive-bot
+        run: |
+          if [ "${{ steps.dedup-state.outputs.bootstrap }}" = "1" ]; then
+            export BOOTSTRAP_DEDUP=1
+          fi
+          ./best-archive-bot
 
       - name: Save DB cache
         if: always()

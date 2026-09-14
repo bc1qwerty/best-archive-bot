@@ -36,10 +36,6 @@ func (s *BobaedreamScraper) FetchBestPosts(client *http.Client) ([]Post, error) 
 	var posts []Post
 
 	table := doc.Find("table.clistTable02").First()
-	if table.Length() == 0 {
-		return posts, nil
-	}
-
 	table.Find("tr").Each(func(_ int, tr *goquery.Selection) {
 		aTag := tr.Find("td.pl14 a").First()
 		if aTag.Length() == 0 {
@@ -84,5 +80,5 @@ func (s *BobaedreamScraper) FetchBestPosts(client *http.Client) ([]Post, error) 
 		posts = append(posts, s.makePost(title, url, votes, views, comments))
 	})
 
-	return s.filterPosts(posts), nil
+	return s.finish(posts)
 }

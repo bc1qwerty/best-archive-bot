@@ -143,5 +143,5 @@ func (s *InvenScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 		posts = append(posts, s.makePost(title, url, votes, views, comments))
 	})
 
-	return s.filterPosts(posts), nil
+	return s.finish(posts)
 }

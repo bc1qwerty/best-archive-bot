@@ -87,7 +87,7 @@ func (s *InterleavingSource) Fetch(ctx context.Context) ([]core.Item, error) {
 		if len(out) > 0 {
 			return out, &PartialFetchError{Err: joined}
 		}
-		return out, joined
+		return out, &TotalFetchError{Err: joined}
 	}
 	return out, nil
 }
@@ -101,3 +101,15 @@ type PartialFetchError struct {
 func (e *PartialFetchError) Error() string { return e.Err.Error() }
 
 func (e *PartialFetchError) Unwrap() error { return e.Err }
+
+// TotalFetchError wraps sub-source failures on a fetch that produced no
+// items at all. The run delivered nothing, so the caller must fail the
+// process (nonzero exit) instead of ending green — otherwise the GHA
+// failure alert and the consecutive-failure guard never see it.
+type TotalFetchError struct {
+	Err error
+}
+
+func (e *TotalFetchError) Error() string { return e.Err.Error() }
+
+func (e *TotalFetchError) Unwrap() error { return e.Err }

@@ -71,5 +71,5 @@ func (s *TheqooScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 		posts = append(posts, s.makePost(title, url, 0, views, 0))
 	})
 
-	return s.filterPosts(posts), nil
+	return s.finish(posts)
 }

@@ -1,7 +1,6 @@
 package scraper
 
 import (
-	"crypto/tls"
 	"fmt"
 	"io"
 	"math/rand"
@@ -33,16 +32,6 @@ func getSemaphore() chan struct{} {
 		semaphore = make(chan struct{}, config.MaxConcurrentRequests)
 	})
 	return semaphore
-}
-
-// NewHTTPClient creates an http.Client with TLS skip-verify and 15s timeout.
-func NewHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout: 15 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
 }
 
 // randomDelay sleeps for a random duration between RequestDelayMin and RequestDelayMax.

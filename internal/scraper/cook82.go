@@ -111,5 +111,5 @@ func (s *Cook82Scraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 	}
 
 	log.Printf("[%s] %d entries, %d posts after individual fetch", s.communityName, len(entries), len(posts))
-	return s.filterPosts(posts), nil
+	return s.finish(posts)
 }

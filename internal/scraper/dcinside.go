@@ -68,5 +68,5 @@ func (s *DcinsideScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 		posts = append(posts, s.makePost(title, url, votes, 0, 0))
 	})
 
-	return s.filterPosts(posts), nil
+	return s.finish(posts)
 }

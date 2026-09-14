@@ -78,15 +78,7 @@ func (s *MlbparkScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 	seen := make(map[string]bool)
 
 	table := doc.Find("table.tbl_type01").First()
-	if table.Length() == 0 {
-		return nil, nil
-	}
-
 	tbody := table.Find("tbody").First()
-	if tbody.Length() == 0 {
-		return nil, nil
-	}
-
 	tbody.Find("tr").Each(func(_ int, tr *goquery.Selection) {
 		tds := tr.Find("td")
 		if tds.Length() < 4 {
@@ -139,5 +131,5 @@ func (s *MlbparkScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 	}
 
 	log.Printf("[%s] %d entries, %d posts after individual fetch", s.communityName, len(entries), len(posts))
-	return s.filterPosts(posts), nil
+	return s.finish(posts)
 }

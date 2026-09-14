@@ -69,9 +69,19 @@ func LogPush(source, level, message, details string) error {
 
 	logURL := strings.Replace(hubURL, "/notifications/push", "/logs/push", 1)
 
-	body := fmt.Sprintf(`{"source":%q,"level":%q,"message":%q,"details":%q}`, source, level, message, details)
+	// json.Marshal, not fmt %q: Go's \x.. escapes for control bytes are
+	// not legal JSON, and the hub's 400 would drop the log line unseen.
+	data, err := json.Marshal(map[string]string{
+		"source":  source,
+		"level":   level,
+		"message": message,
+		"details": details,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
 
-	req, err := http.NewRequest("POST", logURL, bytes.NewReader([]byte(body)))
+	req, err := http.NewRequest("POST", logURL, bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
@@ -83,5 +93,10 @@ func LogPush(source, level, message, details string) error {
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("logpush status %d: %s", resp.StatusCode, body)
+	}
 	return nil
 }

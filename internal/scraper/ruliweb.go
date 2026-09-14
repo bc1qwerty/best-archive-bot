@@ -81,5 +81,5 @@ func (s *RuliwebScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 		posts = append(posts, s.makePost(title, url, votes, 0, comments))
 	})
 
-	return s.filterPosts(posts), nil
+	return s.finish(posts)
 }

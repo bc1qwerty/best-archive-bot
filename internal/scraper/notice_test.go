@@ -45,3 +45,22 @@ func TestIsAllDigits(t *testing.T) {
 		}
 	}
 }
+
+func TestFinish_ZeroRawRowsIsError(t *testing.T) {
+	b := &baseScraper{community: "test", communityName: "테스트"}
+
+	// 목록 셀렉터가 0행 — 레이아웃 변경/안티봇 페이지는 오류로 떠야 한다.
+	if _, err := b.finish(nil); err == nil {
+		t.Error("finish(nil) = nil error, want layout-change error")
+	}
+
+	// 행은 잡혔지만 필터가 전부 걸러낸 것은 정상적인 빈 결과다.
+	posts := []Post{{Title: "t", URL: "not-a-link"}}
+	out, err := b.finish(posts)
+	if err != nil {
+		t.Errorf("finish(filtered-to-zero) error: %v", err)
+	}
+	if len(out) != 0 {
+		t.Errorf("got %d posts, want 0", len(out))
+	}
+}

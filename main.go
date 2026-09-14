@@ -64,9 +64,10 @@ func main() {
 		log.Fatal("BOT_TOKEN / CHAT_ID 환경변수가 필요합니다")
 	}
 
-	// Legacy SQLite owns the retention/cleanup policy (RecordExpireHours).
-	// Framework Store handles only framework-level dedup; we keep both
-	// during the migration window.
+	// Legacy SQLite is kept only because its Init() creates data/posts.db,
+	// which resolveDBPath (and the GHA cache) depend on. Its sent_posts
+	// table is unused; framework Store owns dedup, and its retention runs
+	// in closeStore below (the daemon-only runCleanup never fires here).
 	legacyDB := db.New()
 	if err := legacyDB.Init(); err != nil {
 		log.Fatalf("legacy DB init: %v", err)
@@ -76,7 +77,7 @@ func main() {
 		log.Printf("legacy cleanup warning: %v", err)
 	}
 
-	// Interleaving source mixes 13 communities round-robin so one chatty
+	// Interleaving source mixes 12 communities round-robin so one chatty
 	// site cannot monopolize the dispatch slots.
 	scrapers := scraper.AllScrapers()
 	sources := make([]core.Source, 0, len(scrapers))
@@ -102,16 +103,28 @@ func main() {
 	// The store opens in WAL mode; on this one-shot run the dedup writes
 	// otherwise stay in the "-wal" sidecar, which the GHA cache does not
 	// snapshot. Checkpoint into the main .db (and close) before exit so
-	// bot_seen survives to the next run.
-	defer func() {
+	// bot_seen survives to the next run. Named (not just deferred) because
+	// the total-fetch-failure path exits via os.Exit, which skips defers.
+	closeStore := func() {
+		// One-shot runs never reach the daemon-only runCleanup, so prune
+		// old dedup rows here (same retention as the daemon default).
+		if err := st.Cleanup(90 * 24 * time.Hour); err != nil {
+			log.Printf("store cleanup warning: %v", err)
+		}
 		if err := persist.Checkpoint(st.DB()); err != nil {
 			log.Printf("wal checkpoint warning: %v", err)
 		}
 		if err := st.Close(); err != nil {
 			log.Printf("store close warning: %v", err)
 		}
-	}()
+	}
+	defer closeStore()
 	_ = st.Subscribe(config.ChatID)
+
+	// Set when a poll fetched nothing from any community; the process must
+	// then exit nonzero so the GHA failure alert and the consecutive-failure
+	// guard engage instead of the run ending green.
+	fetchFailedTotal := false
 
 	runner := bot.New(bot.Config{
 		Name:            hubChannel,
@@ -142,6 +155,10 @@ func main() {
 			if errors.As(err, &partial) {
 				level = "warn"
 			}
+			var total *source.TotalFetchError
+			if errors.As(err, &total) {
+				fetchFailedTotal = true
+			}
 			_ = notifyhub.LogPush("best-archive-bot", level, err.Error(), "")
 		},
 		OnPollComplete: func(ctx context.Context, n int) error {
@@ -153,6 +170,12 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
 	defer cancel()
 	runner.PollOnce(ctx)
+
+	if fetchFailedTotal {
+		log.Println("=== Best Archive Bot run FAILED: 전 커뮤니티 fetch 실패 ===")
+		closeStore()
+		os.Exit(1)
+	}
 
 	_ = notifyhub.LogPush("best-archive-bot", "info", "run finished", "")
 	log.Println("=== Best Archive Bot run complete ===")

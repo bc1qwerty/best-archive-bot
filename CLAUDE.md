@@ -40,11 +40,11 @@ go build -o best-archive-bot .
 - `CHAT_ID` - **Required** Telegram chat ID
 
 ## Deployment
-- GitHub Actions: `.github/workflows/bot.yml`, cron `*/15 * * * *` (+ workflow_dispatch with bootstrap input)
+- GitHub Actions: `.github/workflows/bot.yml`, cron `7,22,37,52 * * * *` (+ workflow_dispatch with bootstrap input) — 분 오프셋 이유는 워크플로 주석 참조
 - The workflow checks out `bc1qwerty/txid-bot-framework@main` as a sibling to satisfy the go.mod `replace`
 - Push to main = 자동 반영 (다음 cron 틱부터)
 - dedup 상태의 유일한 사본은 GHA 캐시(`data/posts.db*`) — 유실 감지·부트스트랩 로직은 bot.yml 주석 참조
-- Max 10 posts per run, max 3 per community per run
+- Max 40 posts per run, max 3 per community per run (상한 초과분은 발송 없이 seen 처리돼 영구 유실 — main.go `maxSendPerRun` 주석 참조)
 
 ## Status
 Active. GitHub Actions scheduled execution (acer/dell cron 시절은 종료).

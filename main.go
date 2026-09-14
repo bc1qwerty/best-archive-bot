@@ -26,7 +26,26 @@ const (
 	// stall a cron tick.
 	runTimeout = 5 * time.Minute
 	// maxSendPerRun limits total dispatched items per cron invocation.
-	maxSendPerRun = 10
+	//
+	// ⚠ 이 상한을 넘긴 분량은 프레임워크가 **발송 없이 seen 으로 찍어 버린다** —
+	//   재시도 경로가 없어 영구 유실이다(runner.go "backlog cap"). 그래서 값이
+	//   「한 폴이 실제로 가져올 수 있는 최대」보다 낮으면 평상시에도 조용히 글이
+	//   사라진다. 10 이던 2026-09-12~14 실측: 16회 실행 중 5회가 상한에 걸려
+	//   17건이 그렇게 없어졌다(한 회차 최대 유실 7건).
+	//
+	//   한 폴의 구조적 최대는 (활성 커뮤니티 수) × maxPerCommunity 다 —
+	//   InterleavingSource 가 커뮤니티당 maxPerCommunity 로 자르므로 그보다 많이
+	//   나올 수 없다(지금 12 × 3 = 36). GitHub 스케줄러가 트리거를 흘려 폴 간격이
+	//   2~6시간으로 벌어지는 것이 이 봇의 상시 조건이라(위 bot.yml 주석) 공백이
+	//   길어지면 실제로 그 근처까지 찬다. 커뮤니티 한 곳 분량을 더 얹어 40 으로
+	//   둔다 — 평상시엔 발화하지 않으면서, MaxPerSource 가 풀리는 사고
+	//   (커뮤니티당 최대 20건 → 240건)에는 여전히 브레이크로 남는다.
+	//
+	//   ⚠발송량이 늘어도 텔레그램 한도에 눌려 유실되지는 않는다. 실측 발송
+	//   속도는 ~1건/초(2026-09-13 10건 9.6초, 429 0회)라 40건도 runTimeout 5분
+	//   안이고, 429 가 나도 프레임워크가 retry_after 를 따라 재시도한 뒤
+	//   실패분은 seen 처리를 미뤄 다음 폴에서 다시 집는다.
+	maxSendPerRun = 40
 	// maxPerCommunity caps how many posts a single community contributes to
 	// one run. Because each community's posts are popularity-sorted upstream,
 	// this keeps its hottest few and prevents one busy community (e.g. a game

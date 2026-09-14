@@ -2,7 +2,16 @@ name: Best Archive Bot
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    # ⚠분(minute)을 0,15,30,45(`*/15`)가 아니라 7,22,37,52 로 둔 이유: GitHub 의
+    #   스케줄러는 정시·15분 단위 정각에 가장 붐벼 큐잉이 심하다(공식 문서도
+    #   "run at a different time of the hour" 를 권고한다). `*/15` 이던
+    #   2026-09-08~14 실측은 설계 96회/일 중 **8회 안팎만** 실제로 돌았고,
+    #   폴 간격이 2~6시간까지 벌어졌다. 그 공백이 곧 main.go 의 maxSendPerRun
+    #   초과 → 「발송 없는 seen」 영구 유실로 이어졌다(최근 16회 중 5회가
+    #   상한에 걸려 17건). 형제 리포 safety_alarm_bot 이 같은 진단으로
+    #   0,30 → 7,37 로 옮겨 갔다. 분 오프셋은 이를 완화하는 리포 안의 유일한
+    #   손잡이다 — 바꾼 뒤 gh run list 로 실행 횟수가 실제로 늘었는지 다시 잴 것.
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
     inputs:
       bootstrap:

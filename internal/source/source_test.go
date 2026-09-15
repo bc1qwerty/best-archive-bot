@@ -232,3 +232,62 @@ func TestAdapter_ExpiredBudgetStopsFetch(t *testing.T) {
 		t.Fatalf("live budget fetch failed: items=%d err=%v called=%v", len(items), err, sc.called)
 	}
 }
+
+// 감사 best-archive(B4): 루리웹 글 주소는 글 번호가 경로에 있고 쿼리는
+// 「어느 목록에서 눌렀나」만 담는다. 그래서 같은 글이 목록 위치에 따라 다른
+// 쿼리를 달고 나와 dedup 키가 갈라졌다 — 실측 414건 중 29건(7%)이 «?m=» 값만
+// 달라 두 번 발송됐다. 2026-09-15 베스트 목록 실측에서 read 링크의 쿼리 키는
+// m·t·cate·view 넷뿐이었고, 모두 글 신원과 무관하다.
+func TestNormalizeURL_RuliwebDropsListContextQuery(t *testing.T) {
+	const canonical = "https://bbs.ruliweb.com/best/board/300143/read/76678622"
+	variants := []string{
+		canonical,
+		canonical + "?m=selection&t=now",
+		canonical + "?m=user_info",
+		canonical + "?cate=1035%2C1037%2C1039&view=gallery",
+		canonical + "?m=selection&t=now#comment",
+	}
+	for _, in := range variants {
+		if got := NormalizeURL(in); got != canonical {
+			t.Errorf("NormalizeURL(%q) = %q, want %q", in, got, canonical)
+		}
+	}
+
+	// 같은 글의 모든 형태가 하나의 dedup 키로 접혀야 한다.
+	keys := map[string]bool{}
+	for _, in := range variants {
+		keys[NormalizeURL(in)] = true
+	}
+	if len(keys) != 1 {
+		t.Errorf("dedup 키가 %d 갈래로 갈렸다: %v", len(keys), keys)
+	}
+}
+
+// ⚠좁히기: MLB파크는 m=view 가 고정이고 글 번호도 쿼리에 있어서 쿼리를 비우면
+// 글을 구별할 수 없게 된다 — 서로 다른 글이 한 키로 접혀 «두 번째 글이 유실»된다.
+func TestNormalizeURL_MlbparkKeepsIdentifyingQuery(t *testing.T) {
+	a := "https://mlbpark.donga.com/mp/b.php?m=view&b=bullpen&id=202509150001"
+	b := "https://mlbpark.donga.com/mp/b.php?m=view&b=bullpen&id=202509150002"
+	if got := NormalizeURL(a); got != a {
+		t.Errorf("NormalizeURL(%q) = %q, 그대로여야 한다", a, got)
+	}
+	if NormalizeURL(a) == NormalizeURL(b) {
+		t.Errorf("서로 다른 글이 한 키로 접혔다: %q", NormalizeURL(a))
+	}
+}
+
+// 루리웹이라도 /read/ 가 아닌 목록·검색 주소는 건드리지 않는다.
+func TestNormalizeURL_RuliwebNonReadPathUntouched(t *testing.T) {
+	in := "https://bbs.ruliweb.com/search?q=%EA%B2%80%EC%83%89&board=300143"
+	if got := NormalizeURL(in); got != in {
+		t.Errorf("NormalizeURL(%q) = %q, 그대로여야 한다", in, got)
+	}
+}
+
+// 호스트가 다르면 경로에 /read/ 가 있어도 건드리지 않는다.
+func TestNormalizeURL_OtherHostReadPathUntouched(t *testing.T) {
+	in := "https://example.com/board/read/123?m=selection"
+	if got := NormalizeURL(in); got != in {
+		t.Errorf("NormalizeURL(%q) = %q, 그대로여야 한다", in, got)
+	}
+}

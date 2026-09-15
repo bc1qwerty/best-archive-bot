@@ -37,6 +37,19 @@ func NormalizeURL(raw string) string {
 	}
 	u.Fragment = ""
 
+	// 루리웹 글 주소는 글 번호가 **경로**에 있고(/…/read/<번호>), 쿼리는
+	// 「어느 목록에서 눌러 들어왔나」만 담는다(m=selection&t=now,
+	// m=user_info, cate=…&view=gallery — 2026-09-15 베스트 목록 실측에서
+	// read 링크의 쿼리 키는 m·t·cate·view 넷뿐이었다). 그래서 같은 글이
+	// 목록 위치에 따라 다른 쿼리를 달고 나와 dedup 키가 갈라진다 — 실측
+	// 414건 중 29건(7%)이 «?m=» 값만 달라 두 번 발송됐다.
+	//
+	// ⚠루리웹으로만 좁힌다. MLB파크는 m=view 가 고정이고 글 번호도 쿼리에
+	//   있어서(b.php?m=view&b=…&id=…) 쿼리를 비우면 글을 구별할 수 없게 된다.
+	if strings.EqualFold(u.Hostname(), "bbs.ruliweb.com") && strings.Contains(u.Path, "/read/") {
+		u.RawQuery = ""
+	}
+
 	if u.RawQuery != "" {
 		pairs := strings.Split(u.RawQuery, "&")
 		kept := pairs[:0]

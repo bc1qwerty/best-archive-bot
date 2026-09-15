@@ -31,6 +31,16 @@ concurrency:
   group: best-archive-bot
   cancel-in-progress: false
 
+# ⚠`gh workflow disable`(아래 5회 임계)은 actions:write 가 필요하다. 이 리포의
+#   기본 워크플로 권한은 read 이고(gh api …/actions/permissions/workflow 로 실측,
+#   2026-09-15) 여기에 permissions 선언이 없어서 **그 호출은 항상 403** 이었다.
+#   GHA 의 기본 셸은 `bash -e` 라 403 이 나면 그 자리에서 스텝이 끝나고,
+#   바로 다음 줄의 관리자 텔레그램까지 함께 사라졌다 — 즉 «가장 사람이 필요한
+#   순간에» 설계된 경보가 한 번도 울릴 수 없는 상태였다.
+permissions:
+  contents: read
+  actions: write
+
 # Opt the Node-20 actions (checkout, cache, setup-go) into the Node 24 runtime
 # before the 2026-06-02 forced cutover. actions/cache has no Node-24 release
 # yet, so this env var covers every action at once.
@@ -63,12 +73,20 @@ jobs:
             --jq '[.[] | select(.conclusion == "failure")] | length')
           echo "consecutive_failures=$FAILURES" >> "$GITHUB_OUTPUT"
           if [ "$FAILURES" -ge 5 ]; then
-            echo "🛑 5회 연속 실패 감지 — 워크플로우를 자동 비활성화합니다."
-            gh workflow disable bot.yml
-            # 관리자에게 알림
-            curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-              -d chat_id="${ADMIN_ID}" \
-              -d text="🛑 best-archive-bot 자동 비활성화%0A5회 연속 실패로 워크플로우를 중단했습니다.%0A확인 후 수동으로 재활성화하세요.%0Agh workflow enable bot.yml"
+            echo "🛑 5회 연속 실패 감지"
+            # ⚠순서가 중요하다. 알림이 먼저다 — 비활성화가 실패해도 사람에게는
+            #   반드시 닿아야 한다. 예전에는 disable 이 먼저였고, 그것이 403 으로
+            #   죽으면서 이 알림까지 통째로 못 나갔다.
+            # ⚠`-sS --fail-with-body` 로 바꾼다. `-s` 만 쓰면 401/403/429 도
+            #   exit 0 이라 «보냈다고 믿는데 안 간» 상태가 된다.
+            if curl -sS --fail-with-body -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+                 -d chat_id="${ADMIN_ID}" \
+                 -d text="🛑 best-archive-bot 5회 연속 실패%0A워크플로우 비활성화를 시도합니다.%0A재활성화: gh workflow enable bot.yml"; then
+              echo "paged=1" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::관리자 텔레그램 발송 실패 — 아래 비활성화만 시도한다"
+            fi
+            gh workflow disable bot.yml || echo "::error::gh workflow disable 실패(actions:write 권한 확인)"
             exit 1
           fi
 
@@ -173,7 +191,10 @@ jobs:
           key: posts-db-${{ github.run_id }}
 
       - name: Notify failure to Telegram
-        if: failure() && steps.check-failures.outputs.consecutive_failures < 5
+        # ⚠`< 5` 하나로 «임계 도달»과 «중복 방지»를 겸하면, 임계 경로가 실패했을 때
+        #   폴백까지 같이 죽는다(5회째에 임계 스텝이 403 으로 죽으면 여기도 5<5 로
+        #   스킵돼 알림이 0건이 됐다). 임계 스텝이 «실제로 알렸을 때»만 건너뛴다.
+        if: failure() && steps.check-failures.outputs.paged != '1'
         run: |
           curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
             -d chat_id="${ADMIN_ID}" \

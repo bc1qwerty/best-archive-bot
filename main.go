@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
 	"log"
 	"os"
 	"path/filepath"
@@ -63,8 +64,14 @@ const (
 type ArchiveFormatter struct{}
 
 func (f *ArchiveFormatter) Format(item core.Item) core.Message {
+	// ⚠ParseMode HTML 메시지에 값을 그대로 끼우면 텔레그램이 파싱에서 거절해
+	// **그 글은 영영 도착하지 않는다**. 제목에 «<» 가 든 인기글이 실제로
+	// 그렇게 사라졌다(실로그 send error: can't parse entities). 커뮤니티
+	// 제목은 <-_->, <속보>, 부등호 비교처럼 «<» 를 예사로 쓴다.
 	text := fmt.Sprintf("🔥 <b>[%s]</b> 인기글\n\n%s\n\n🔗 <a href=\"%s\">본문 보기</a>",
-		item.Category, item.Title, item.URL)
+		html.EscapeString(item.Category),
+		html.EscapeString(item.Title),
+		html.EscapeString(item.URL))
 	return core.Message{
 		Text:      text,
 		ParseMode: "HTML",

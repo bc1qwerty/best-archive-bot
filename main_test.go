@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/bc1qwerty/best-archive-bot/internal/scraper"
@@ -100,5 +101,41 @@ func TestMaxSendPerRunCoversFullFetch(t *testing.T) {
 	runner.PollOnce(context.Background())
 	if len(ntf.sent) != burst {
 		t.Fatalf("두 번째 폴에서 %d건이 더 발송됐다 — dedup 이 깨졌다", len(ntf.sent)-burst)
+	}
+}
+
+// 감사 best-archive(B3): ParseMode HTML 메시지에 제목·분류·URL 을 이스케이프
+// 없이 끼워서, 제목에 «<» 가 든 인기글은 텔레그램이 파싱에서 거절해 **영영
+// 도착하지 않았다**(실로그 send error). 커뮤니티 제목은 <-_->, <속보> 처럼
+// 부등호를 예사로 쓴다.
+func TestArchiveFormatterEscapesHTML(t *testing.T) {
+	var f ArchiveFormatter
+	msg := f.Format(core.Item{
+		Category: "루리웹 <유머>",
+		Title:    `<속보> a < b & "c" 라고?`,
+		URL:      "https://bbs.ruliweb.com/best/board/300143/read/1?a=1&b=2",
+	})
+
+	// 링크 구조(<b>, <a href>)는 남고, 값에서 온 꺾쇠만 실체참조로 바뀐다.
+	for _, want := range []string{
+		"<b>[루리웹 &lt;유머&gt;]</b>",
+		"&lt;속보&gt; a &lt; b &amp; &#34;c&#34; 라고?",
+		`href="https://bbs.ruliweb.com/best/board/300143/read/1?a=1&amp;b=2"`,
+	} {
+		if !strings.Contains(msg.Text, want) {
+			t.Errorf("빠진 조각 %q\n실제: %s", want, msg.Text)
+		}
+	}
+
+	// 구 동작 주입 시 잡히는 조건: 값에서 온 여는 태그가 날것으로 남으면 안 된다.
+	for _, bad := range []string{"<속보>", "<유머>"} {
+		if strings.Contains(msg.Text, bad) {
+			t.Errorf("이스케이프되지 않은 값이 남았다 %q — 텔레그램이 거절해 유실된다\n실제: %s", bad, msg.Text)
+		}
+	}
+
+	// 마크업 바깥의 & 는 반드시 &amp; 여야 한다 — 이것도 파싱 거절 사유다.
+	if strings.Contains(msg.Text, "& \"c\"") {
+		t.Errorf("생 & 가 남았다: %s", msg.Text)
 	}
 }

@@ -2,6 +2,14 @@ name: Best Archive Bot
 
 on:
   schedule:
+    # ⚠**이 schedule 은 이제 폴백이다.** 주 트리거는 맥 launchd
+    #   `uk.txid.gha-dispatch-best-archive`(15분 주기)가 `gh workflow run` 으로 깨운다.
+    #   맥이 꺼져 있을 때만 아래 cron 이 의미가 있다(그때도 하루 5~8회는 돈다).
+    # ⚠**분 오프셋 조정은 효과가 없었다 — 다시 시도하지 말 것.** 아래 근거대로 7,22,37,52
+    #   로 옮긴 뒤 20.4시간 재측정한 결과 **4회**(설계 82회 대비), 즉 변경 전 6.6회/일에서
+    #   4.7회/일로 **오히려 줄었다**(2026-09-15). 형제 리포 safety_alarm 도 같은 결과였다.
+    #   GitHub 의 cron 배달은 best-effort 이고 우리가 돌릴 손잡이는 여기 없다.
+    # (아래는 그때의 근거 기록)
     # ⚠분(minute)을 0,15,30,45(`*/15`)가 아니라 7,22,37,52 로 둔 이유: GitHub 의
     #   스케줄러는 정시·15분 단위 정각에 가장 붐벼 큐잉이 심하다(공식 문서도
     #   "run at a different time of the hour" 를 권고한다). `*/15` 이던

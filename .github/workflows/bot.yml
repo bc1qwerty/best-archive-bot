@@ -106,6 +106,17 @@ jobs:
         with:
           go-version: '1.24'
 
+      # ⚠ 2026-09-16 신설. 이 리포에는 테스트가 4개 있는데(main_test.go,
+      #   internal/{scraper,source,persist}/*_test.go) **CI 어디에서도 돌지 않았다** —
+      #   워크플로가 bot.yml·keepalive.yml 둘뿐이고 여기는 곧장 go build 로 갔다.
+      #   2026-09-10 스윕이 bid-alert·food-recall·realestate 에 같은 게이트를 넣을 때
+      #   여기만 빠졌다(정책이 일부 경로에만).
+      #   왜 중요한가: persist 계층의 회귀는 «발송 없이 seen 처리 → 영구 유실» 로
+      #   직결되는데, 이 잡은 15분마다 빌드해서 **그대로 프로덕션 발송까지** 간다.
+      #   형제 safety_alarm check_notice.yml 의 주석이 같은 이유를 적어 뒀다:
+      #   "If tests fail, the bot does NOT run, so no wrong-URL notifications can go out."
+      - run: go vet ./...
+      - run: go test ./...
       - name: Build
         run: go build -o best-archive-bot .
 

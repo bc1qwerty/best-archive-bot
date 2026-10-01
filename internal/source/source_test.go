@@ -291,3 +291,32 @@ func TestNormalizeURL_OtherHostReadPathUntouched(t *testing.T) {
 		t.Errorf("NormalizeURL(%q) = %q, 그대로여야 한다", in, got)
 	}
 }
+
+// 2026-10-01: 구조적 실패(«요청 200 + 목록 0행»)는 부분 실패로 묶여도 error 등급이어야
+// 한다. main.go 의 OnError 가 `errors.As(err, &layout)` 로 그것을 판정하는데, 그 판정은
+// PartialFetchError → errors.Join → 각 소스 오류 세 겹을 지나야 닿는다. 겹 중 하나라도
+// %w 를 잃으면 판정이 조용히 false 가 되고, 그러면 이 경보는 다시 warn 으로 가라앉아
+// 대시보드에도 텔레그램에도 안 나온다 — 이토랜드가 그렇게 16일을 갔다.
+func TestPartialFetchErrorKeepsLayoutErrorReachable(t *testing.T) {
+	dead := fakeSource{name: "이토랜드", err: &scraper.LayoutError{Community: "이토랜드"}}
+	alive := fakeSource{name: "살아있는 소스", items: []core.Item{
+		{ID: "https://example.com/1", Title: "t1", URL: "https://example.com/1"},
+	}}
+
+	out, err := NewInterleavingSource(dead, alive).Fetch(context.Background())
+	if len(out) != 1 {
+		t.Fatalf("items %d, want 1 (한 소스는 살아 있다)", len(out))
+	}
+
+	var partial *PartialFetchError
+	if !errors.As(err, &partial) {
+		t.Fatalf("PartialFetchError 가 아니다: %v", err)
+	}
+	var layout *scraper.LayoutError
+	if !errors.As(err, &layout) {
+		t.Fatal("LayoutError 에 닿지 못했다 — 어느 겹에서 %w 가 끊겼다(경보가 warn 으로 가라앉는다)")
+	}
+	if layout.Community != "이토랜드" {
+		t.Errorf("Community=%q", layout.Community)
+	}
+}

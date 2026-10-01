@@ -152,9 +152,26 @@ func (b *baseScraper) filterPosts(posts []Post) []Post {
 // thresholds) remains a normal empty result.
 func (b *baseScraper) finish(posts []Post) ([]Post, error) {
 	if len(posts) == 0 {
-		return nil, fmt.Errorf("%s: 목록 셀렉터 0행 — 레이아웃 변경/안티봇 의심", b.communityName)
+		return nil, &LayoutError{Community: b.communityName}
 	}
 	return b.filterPosts(posts), nil
+}
+
+// LayoutError 는 «요청은 200 인데 목록이 0행» 을 전송 실패와 구분한다.
+//
+// ⚠왜 별 타입인가 (2026-10-01): 데이터센터 IP 차단(RST·403·헤더 타임아웃)은 다음
+// 실행에 저절로 낫는 일이라 이 fleet 은 부분 실패를 warn 으로 내려 왔다. 그런데
+// **구조적 실패는 절대 저절로 낫지 않는다.** 이토랜드가 사이트를 다시 지어
+// `/bbs/hit.php` 가 홈으로 308 되기 시작한 뒤, 이 0행 경보는 warn 이라 대시보드
+// Recent Errors 에도 안 뜨고 텔레그램도 안 가서 **16일간 하루 ~100건씩 쌓이며 아무도
+// 몰랐다**(허브 로그 실측 9/16~10/1). 사람이 셀렉터를 고쳐야 하는 일이므로 부분
+// 실패여도 error 로 올린다 — main.go 의 OnError 가 이 타입을 보고 등급을 되돌린다.
+type LayoutError struct {
+	Community string
+}
+
+func (e *LayoutError) Error() string {
+	return fmt.Sprintf("%s: 목록 셀렉터 0행 — 레이아웃 변경/안티봇 의심", e.Community)
 }
 
 // AllScrapers returns a slice of the active community scrapers.

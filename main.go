@@ -187,6 +187,16 @@ func main() {
 			if errors.As(err, &partial) {
 				level = "warn"
 			}
+			// ⚠**구조적 실패는 warn 으로 내리지 않는다(2026-10-01).** IP 차단은 다음
+			// 실행에 저절로 낫지만 «요청 200 + 목록 0행» 은 사람이 셀렉터를 고쳐야
+			// 낫는다. 그 둘을 한 등급에 묶어 뒀더니 이토랜드가 사이트를 다시 지은 뒤
+			// 0행 경보가 **16일간 하루 ~100건씩 쌓이는데 대시보드에도 안 뜨고 텔레그램도
+			// 안 갔다** — 그 커뮤니티 수집이 통째로 멈춘 것을 아무도 몰랐다.
+			// errors.Join 은 다중 Unwrap 이라 errors.As 가 합쳐진 사유까지 훑는다.
+			var layout *scraper.LayoutError
+			if errors.As(err, &layout) {
+				level = "error"
+			}
 			var total *source.TotalFetchError
 			if errors.As(err, &total) {
 				fetchFailedTotal = true

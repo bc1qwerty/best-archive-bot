@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	invenManRe    = regexp.MustCompile(`([\d.]+)만`)
-	invenDigitRe  = regexp.MustCompile(`\d+`)
+	invenManRe   = regexp.MustCompile(`([\d.]+)만`)
+	invenDigitRe = regexp.MustCompile(`\d+`)
 )
 
 // InvenScraper scrapes 인벤 hot posts.

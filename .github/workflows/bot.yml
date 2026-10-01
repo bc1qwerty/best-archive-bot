@@ -133,6 +133,17 @@ jobs:
       #   직결되는데, 이 잡은 15분마다 빌드해서 **그대로 프로덕션 발송까지** 간다.
       #   형제 safety_alarm check_notice.yml 의 주석이 같은 이유를 적어 뒀다:
       #   "If tests fail, the bot does NOT run, so no wrong-URL notifications can go out."
+      # ⚠ 2026-10-01 신설. 드리프트가 쌓여 있던 것(main.go·inven.go·normalize.go)을
+      #   치우면서 같이 넣는다 — 한 번 치우고 게이트가 없으면 또 쌓인다.
+      #   `go vet` 은 포맷을 보지 않는다. 실패 시 어느 파일인지 찍고 끝낸다.
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt 가 필요한 파일:"; echo "$unformatted"
+            echo "로컬에서 'gofmt -w .' 후 다시 커밋할 것."
+            exit 1
+          fi
       - run: go vet ./...
       - run: go test ./...
       - name: Build

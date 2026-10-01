@@ -159,16 +159,16 @@ func main() {
 	fetchFailedTotal := false
 
 	runner := bot.New(bot.Config{
-		Name:            hubChannel,
-		Source:          interleaved,
-		Formatter:       &ArchiveFormatter{},
-		Notifier:        ntf,
-		Store:           st,
-		ArchiveDir:      archiveDir(baseDir),
-		HeartbeatDir:    heartbeatDir(),
+		Name:              hubChannel,
+		Source:            interleaved,
+		Formatter:         &ArchiveFormatter{},
+		Notifier:          ntf,
+		Store:             st,
+		ArchiveDir:        archiveDir(baseDir),
+		HeartbeatDir:      heartbeatDir(),
 		MaxItemsPerPoll:   maxSendPerRun,
 		ArchiveRetainDays: 30,
-		BootstrapMode:   os.Getenv("BOOTSTRAP_DEDUP") == "1",
+		BootstrapMode:     os.Getenv("BOOTSTRAP_DEDUP") == "1",
 		OnNewItem: func(ctx context.Context, item core.Item) error {
 			return notifyhub.Push(notifyhub.Payload{
 				ChannelID: hubChannel,

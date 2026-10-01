@@ -10,19 +10,19 @@ import (
 // with list pagination / tracking. Stripping them canonicalizes the URL so
 // the same post reached via different list pages dedups to one item.
 var volatileParams = map[string]bool{
-	"page":      true,
-	"pageindex": true,
-	"pg":        true,
-	"fromlist":  true,
-	"ref":       true,
+	"page":         true,
+	"pageindex":    true,
+	"pg":           true,
+	"fromlist":     true,
+	"ref":          true,
 	"utm_source":   true,
 	"utm_medium":   true,
 	"utm_campaign": true,
 	"utm_term":     true,
 	"utm_content":  true,
-	"fbclid":    true,
-	"gclid":     true,
-	"spm":       true,
+	"fbclid":       true,
+	"gclid":        true,
+	"spm":          true,
 }
 
 // NormalizeURL strips the fragment and known volatile query parameters

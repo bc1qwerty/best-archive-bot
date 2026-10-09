@@ -64,10 +64,26 @@ func (s *MlbparkScraper) parsePostDetail(client *http.Client, url string) (int, 
 	return votes, views
 }
 
+// mlbparkTodayEmpty 는 TODAY BEST 가 비어 있는 정상 상태를 알아본다. 이 목록은
+// KST 자정에 비워지고 30분쯤 채워지지 않는다. 그동안 표 자리에 안내 문구만
+// 나오는데, 이를 0행 LayoutError 로 올려 매일 자정 error 경보가 떴다
+// (2026-10-10 00:03 실물 = testdata/mlbpark-best-midnight.html).
+// 표도 문구도 없으면 진짜 레이아웃 변경이므로 false 다.
+func mlbparkTodayEmpty(doc *goquery.Document) bool {
+	if doc.Find("table.tbl_type01").Length() > 0 {
+		return false
+	}
+	return strings.Contains(doc.Find("div.message").Text(), "요청하신 정보가 존재하지 않습니다")
+}
+
 func (s *MlbparkScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 	doc, err := fetchDocument(client, fmt.Sprintf("%s/mp/best.php?b=bullpen&m=like", s.baseURL), s.encoding, s.baseURL)
 	if err != nil {
 		return nil, err
+	}
+	if mlbparkTodayEmpty(doc) {
+		log.Printf("[%s] TODAY BEST 비어 있음 (자정 초기화)", s.communityName)
+		return nil, nil
 	}
 
 	type entry struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -230,6 +231,31 @@ func TestAdapter_ExpiredBudgetStopsFetch(t *testing.T) {
 	items, err = a.Fetch(context.Background())
 	if err != nil || len(items) != 1 || !sc.called {
 		t.Fatalf("live budget fetch failed: items=%d err=%v called=%v", len(items), err, sc.called)
+	}
+}
+
+// 뽐뿌는 데이터센터 IP 에 302 로 쿠키를 심고 쿠키 없이 돌아오면 403 을 준다.
+// 어댑터 클라이언트가 쿠키를 들고 리다이렉트를 따라가야 통과한다.
+func TestAdapter_ClientKeepsCookiesAcrossRedirect(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("ppck") == "" {
+			http.SetCookie(w, &http.Cookie{Name: "pp_ck", Value: "x", Path: "/"})
+			http.Redirect(w, r, "/hot.php?ppck=1", http.StatusFound)
+			return
+		}
+		if _, err := r.Cookie("pp_ck"); err != nil {
+			w.WriteHeader(http.StatusForbidden)
+		}
+	}))
+	defer srv.Close()
+
+	resp, err := NewAdapter(&budgetScraper{}).client.Get(srv.URL + "/hot.php")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("want 200 after cookie redirect, got %d", resp.StatusCode)
 	}
 }
 

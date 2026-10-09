@@ -3,6 +3,7 @@ package source
 import (
 	"context"
 	"net/http"
+	"net/http/cookiejar"
 	"time"
 
 	"github.com/bc1qwerty/best-archive-bot/internal/scraper"
@@ -16,9 +17,13 @@ type ScraperAdapter struct {
 }
 
 func NewAdapter(s scraper.Scraper) *ScraperAdapter {
+	// 쿠키 저장소가 필요한 이유: 뽐뿌는 데이터센터 IP 에 302 → `?ppck=1` 로
+	// `pp_ck` 쿠키를 심고 그 쿠키 없이 돌아오면 403 을 준다(2026-10-01~ 9일간
+	// 전 실행 403). cookiejar.New(nil) 은 에러를 내지 않는다.
+	jar, _ := cookiejar.New(nil)
 	return &ScraperAdapter{
 		scraper: s,
-		client:  &http.Client{Timeout: 30 * time.Second},
+		client:  &http.Client{Timeout: 30 * time.Second, Jar: jar},
 	}
 }
 

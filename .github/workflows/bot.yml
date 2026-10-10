@@ -122,7 +122,9 @@ jobs:
           #   go1.26.8 에서 **0건**. 형제 bid-alert·food-recall·realestate 는 이미 1.26 이다.
           #   ⚠`go-version-file: go.mod` 로 바꾸지 않는다 — 그러면 최소값(1.25.0)에 다시
           #     고정돼 지금 상태로 되돌아간다. 최소 요구와 «빌드에 쓸 툴체인» 은 다른 값이다.
-          go-version: '1.26'
+          # ⚠ 2026-10-10: check-latest 가 없으면 러너 캐시의 낡은 패치를 쓴다(실측: '1.26' → 캐시 go1.26.8, stdlib 보안 수정 누락).
+          go-version: '1.27'
+          check-latest: true
 
       # ⚠ 2026-09-16 신설. 이 리포에는 테스트가 4개 있는데(main_test.go,
       #   internal/{scraper,source,persist}/*_test.go) **CI 어디에서도 돌지 않았다** —

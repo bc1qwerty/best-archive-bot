@@ -66,7 +66,7 @@ func (s *BobaedreamScraper) FetchBestPosts(client *http.Client) ([]Post, error) 
 		}
 
 		comments := 0
-		replySpan := tr.Find("span.totreply").First()
+		replySpan := tr.Find(".totreply").First()
 		if replySpan.Length() > 0 {
 			if v, err := strconv.Atoi(strings.TrimSpace(replySpan.Text())); err == nil {
 				comments = v

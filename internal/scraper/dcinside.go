@@ -61,11 +61,14 @@ func (s *DcinsideScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 			}
 		}
 
+		views := firstInt(row.Find("td.gall_count").First().Text())
+		comments := firstInt(row.Find("span.reply_num").First().Text()) // «[23]» 또는 «[23/2]»
+
 		url := href
 		if !strings.HasPrefix(href, "http") {
 			url = s.baseURL + href
 		}
-		posts = append(posts, s.makePost(title, url, votes, 0, 0))
+		posts = append(posts, s.makePost(title, url, votes, views, comments))
 	})
 
 	return s.finish(posts)

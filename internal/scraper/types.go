@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/bc1qwerty/best-archive-bot/internal/config"
@@ -58,6 +60,15 @@ func (b *baseScraper) makePost(title, url string, votes, views, comments int) Po
 	}
 }
 
+var firstIntRe = regexp.MustCompile(`\d[\d,]*`)
+
+// firstInt 는 text 의 첫 숫자를 읽는다(천 단위 쉼표 허용). 없으면 0.
+// «(35)», «[23/2]», «조회 15,481» 처럼 괄호·접두어가 붙은 칸을 그대로 넘기면 된다.
+func firstInt(text string) int {
+	v, _ := strconv.Atoi(strings.ReplaceAll(firstIntRe.FindString(text), ",", ""))
+	return v
+}
+
 // thresholds 는 인기 판정 기준이다. 0 인 지표는 판정에 쓰지 않는다.
 type thresholds struct{ votes, views, comments int }
 
@@ -66,17 +77,22 @@ type thresholds struct{ votes, views, comments int }
 // 목록마다 지표의 자릿수와 회전 속도가 달라 전역 기준 하나로는 하루 건수가
 // 0.2~218건으로 갈렸다(허브 실측 2026-10-23~11-05). 커뮤니티당 하루 15~30건을
 // 목표로 그날 목록 스냅샷의 통과율에 비례해 잡은 값이다 — 배포 뒤 허브 건수로 다시 맞춘다.
-// 옆 숫자는 조정 전 하루 평균.
+// 옆 숫자는 조정 전 하루 평균. 키는 baseScraper.community(TestThresholdKeys 가 대조한다).
 var communityThresholds = map[string]thresholds{
 	"etoland":    {votes: 40, views: 6000, comments: 60},    // 218
-	"ppomppu":    {votes: 100, views: 30000},                // 47
-	"bobaedream": {votes: 110, views: 20000, comments: 150}, // 33
-	"dcinside":   {votes: 80},                               // 16
+	"ppomppu":    {votes: 100, views: 30000, comments: 80},  // 47
+	"bobaedream": {votes: 110, views: 20000, comments: 80},  // 33
+	"theqoo":     {views: 20000, comments: 300},             // 27 — 추천 칸이 없다
+	"ruliweb":    {votes: 100, views: 40000, comments: 150}, // 25
+	"dcinside":   {votes: 80, views: 15000, comments: 120},  // 16
 	"inven":      {votes: 80, views: 15000, comments: 100},  // 8.8
 	"mlbpark":    {votes: 40, views: 10000},                 // 3.5 — 목록이 23행이라 더 늘지 않는다
-	"natepann":   {votes: 30, comments: 30},                 // 2.6
-	"82cook":     {views: 9000},                             // 1.0
+	"natepann":   {votes: 30, views: 15000, comments: 30},   // 2.6
+	"cook82":     {views: 9000},                             // 1.0
+	"humoruniv":  {votes: 300},                              // 0.2 — 주간 베스트라 목록이 거의 안 바뀐다. 전부 통과 수준
 }
+
+func (b *baseScraper) base() *baseScraper { return b }
 
 func (b *baseScraper) thresholds() thresholds {
 	if t, ok := communityThresholds[b.community]; ok {

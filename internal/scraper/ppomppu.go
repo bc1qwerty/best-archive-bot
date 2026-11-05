@@ -106,7 +106,8 @@ func (s *PpomppuScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 		// Deduplicate by URL
 		if !seen[url] {
 			seen[url] = true
-			posts = append(posts, s.makePost(title, url, votes, views, 0))
+			comments := firstInt(row.Find("span.list_comment2").First().Text())
+			posts = append(posts, s.makePost(title, url, votes, views, comments))
 		}
 	})
 

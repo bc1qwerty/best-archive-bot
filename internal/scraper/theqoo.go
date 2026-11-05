@@ -46,7 +46,7 @@ func (s *TheqooScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 			return
 		}
 
-		aTag := row.Find("td.title a").First()
+		aTag := row.Find("td.title a").Not(".replyNum").First()
 		if aTag.Length() == 0 {
 			return
 		}
@@ -64,11 +64,13 @@ func (s *TheqooScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 			views = v
 		}
 
+		comments := firstInt(row.Find("a.replyNum").First().Text())
+
 		url := href
 		if !strings.HasPrefix(href, "http") {
 			url = s.baseURL + href
 		}
-		posts = append(posts, s.makePost(title, url, 0, views, 0))
+		posts = append(posts, s.makePost(title, url, 0, views, comments))
 	})
 
 	return s.finish(posts)

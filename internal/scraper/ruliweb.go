@@ -74,11 +74,13 @@ func (s *RuliwebScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 			}
 		}
 
+		views := firstInt(row.Find("td.hit").First().Text())
+
 		url := href
 		if !strings.HasPrefix(href, "http") {
 			url = s.baseURL + href
 		}
-		posts = append(posts, s.makePost(title, url, votes, 0, comments))
+		posts = append(posts, s.makePost(title, url, votes, views, comments))
 	})
 
 	return s.finish(posts)

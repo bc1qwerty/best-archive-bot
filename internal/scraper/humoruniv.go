@@ -62,7 +62,11 @@ func (s *HumorunivScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 			return
 		}
 		seen[url] = true
-		posts = append(posts, s.makePost(title, url, 0, 0, 0))
+		// 같은 행의 칸: 제목 옆 «[152]»(댓글), td.li_und 첫째=조회 «68,394», 둘째=추천.
+		row := titleSpan.Closest("tr")
+		und := row.Find("td.li_und")
+		comments := firstInt(row.Find("span.list_comment_num").First().Text())
+		posts = append(posts, s.makePost(title, url, firstInt(und.Eq(1).Text()), firstInt(und.Eq(0).Text()), comments))
 	})
 
 	return s.finish(posts)

@@ -55,34 +55,38 @@ func TestEtolandParseList(t *testing.T) {
 		}
 	}
 
-	// 댓글 수를 읽어야 이토랜드 기준(communityThresholds)이 걸린다. fixture 4행의
-	// 실물 값이다 — 못 읽으면 FetchBestPosts 가 LayoutError 로 올린다.
-	var got []int
+	// 지표를 읽어야 이토랜드 기준(communityThresholds)이 걸린다. fixture 4행의
+	// 실물 값이다 — 조회수를 못 읽으면 FetchBestPosts 가 LayoutError 로 올린다.
+	var got [][3]int
 	for _, p := range posts {
-		got = append(got, p.Comments)
-		if p.Votes != 0 || p.Views != 0 {
-			t.Errorf("목록에 없는 지표가 채워졌다: %+v", p)
-		}
+		got = append(got, [3]int{p.Votes, p.Views, p.Comments})
 	}
-	if want := []int{14, 12, 4, 5}; fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Errorf("댓글 수 = %v, want %v", got, want)
+	want := [][3]int{{23, 1839, 14}, {20, 1807, 12}, {17, 563, 4}, {12, 843, 5}}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("지표(추천,조회,댓글) = %v, want %v", got, want)
 	}
-	if !anyComments(posts) {
-		t.Error("anyComments=false — 레이아웃 경보가 오발한다")
+	if !anyViews(posts) {
+		t.Error("anyViews=false — 레이아웃 경보가 오발한다")
 	}
 }
 
 func TestEtolandThreshold(t *testing.T) {
 	s := NewEtolandScraper()
-	min := communityThresholds["etoland"].comments
+	th := communityThresholds["etoland"]
 	cases := []struct {
-		comments int
-		keep     bool
-	}{{min, true}, {min - 1, false}, {0, false}} // 0 = 댓글 칸 없음, 면제로 통과하면 안 된다
+		votes, views, comments int
+		keep                   bool
+	}{
+		{th.votes, 1, 1, true},
+		{1, th.views, 1, true},
+		{1, 1, th.comments, true},
+		{th.votes - 1, th.views - 1, th.comments - 1, false},
+		{0, 0, 0, false}, // 지표를 못 읽은 행은 면제로 통과하면 안 된다
+	}
 	for _, c := range cases {
-		p := s.makePost("t", "https://etoland.co.kr/hit/etohumor07/view/t-1", 0, 0, c.comments)
+		p := s.makePost("t", "https://etoland.co.kr/hit/etohumor07/view/t-1", c.votes, c.views, c.comments)
 		if got := s.shouldInclude(p); got != c.keep {
-			t.Errorf("comments=%d: shouldInclude=%v, want %v", c.comments, got, c.keep)
+			t.Errorf("%+v: shouldInclude=%v, want %v", c, got, c.keep)
 		}
 	}
 }

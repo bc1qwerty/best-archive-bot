@@ -9,7 +9,10 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-var etolandCommentRe = regexp.MustCompile(`\((\d+)\)`)
+var (
+	etolandCommentRe = regexp.MustCompile(`\((\d+)\)`)
+	etolandStatRe    = regexp.MustCompile(`^(조회|추천)\s*([\d,]+)$`)
+)
 
 // EtolandScraper scrapes 이토랜드 인기글(hit) 목록.
 //
@@ -27,13 +30,13 @@ var etolandCommentRe = regexp.MustCompile(`\((\d+)\)`)
 //   - 인코딩이 **EUC-KR → UTF-8**
 //   - 글 URL 이 이미 최종 주소다 → 예전의 `hit.php?bn_id=` → `board.php` 2단 해석이 불필요
 //     (요청 수가 행당 1건씩 줄어든다)
-//   - 목록에 **추천·조회가 실리지 않는다.** 댓글 수만 있는데 자릿수가 다르다
-//     (실측 69행: 최소 4 · 중앙 20 · 최대 111). 전역 `config.MinComments`(150)로
-//     판정하면 전량이 걸러지므로 `communityThresholds` 에 이토랜드 몫을 따로 둔다.
+//   - 지표는 제목 옆 `(댓글)` 과 아랫줄 `조회 N | 추천 N` 에 있다. 자릿수가 다른
+//     사이트보다 작아 전역 기준으로는 전량이 걸러지므로 `communityThresholds` 에
+//     이토랜드 몫을 따로 둔다.
 //
-// 2026-11-06: 지표 없이 전량 면제로 통과시키던 동안 하루 218건, 전체의 57%를
-// 차지했다. 댓글 수를 채워 기준을 건다. 댓글 수를 한 행도 못 읽으면 전량이
-// 조용히 걸러지므로 레이아웃 오류로 올린다.
+// 2026-11-06: 지표가 없다고 잘못 보고 전량 면제로 통과시키던 동안 하루 218건,
+// 전체의 57%를 차지했다. 조회수는 모든 행에 있으므로, 한 행도 못 읽으면 전량이
+// 조용히 걸러지기 전에 레이아웃 오류로 올린다.
 type EtolandScraper struct {
 	baseScraper
 }
@@ -45,7 +48,7 @@ func NewEtolandScraper() *EtolandScraper {
 			communityName: "이토랜드",
 			baseURL:       "https://etoland.co.kr",
 			encoding:      "utf-8",
-			dataRequired:  true, // 댓글 0 인 행은 «지표 없음» 면제로 통과시키지 않는다
+			dataRequired:  true, // 지표를 못 읽은 행을 «지표 없음» 면제로 통과시키지 않는다
 		},
 	}
 }
@@ -58,15 +61,15 @@ func (s *EtolandScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 		return nil, err
 	}
 	posts := s.parseList(doc)
-	if len(posts) > 0 && !anyComments(posts) {
-		return nil, &LayoutError{Community: s.communityName, Reason: "댓글 수를 한 행도 못 읽었다 — 레이아웃 변경 의심"}
+	if len(posts) > 0 && !anyViews(posts) {
+		return nil, &LayoutError{Community: s.communityName, Reason: "조회수를 한 행도 못 읽었다 — 레이아웃 변경 의심"}
 	}
 	return s.finish(posts)
 }
 
-func anyComments(posts []Post) bool {
+func anyViews(posts []Post) bool {
 	for _, p := range posts {
-		if p.Comments > 0 {
+		if p.Views > 0 {
 			return true
 		}
 	}
@@ -78,7 +81,7 @@ func anyComments(posts []Post) bool {
 // 또 바뀌면 시험이 먼저 깨져야 한다.
 func (s *EtolandScraper) parseList(doc *goquery.Document) []Post {
 	var posts []Post
-	seen := make(map[string]bool)
+	seen := make(map[string]int) // url → posts 의 위치
 
 	doc.Find("a[href]").Each(func(_ int, a *goquery.Selection) {
 		href, _ := a.Attr("href")
@@ -97,16 +100,31 @@ func (s *EtolandScraper) parseList(doc *goquery.Document) []Post {
 			return
 		}
 		url := s.baseURL + href
-		if seen[url] {
-			return
-		}
-		seen[url] = true
 		// 댓글 수는 `(<!-- -->12<!-- -->)` 모양이다. 댓글이 없는 행엔 칸이 없다.
 		comments := 0
 		if m := etolandCommentRe.FindStringSubmatch(a.Find("span.comment-s").First().Text()); m != nil {
 			comments, _ = strconv.Atoi(m[1])
 		}
-		posts = append(posts, s.makePost(title, url, 0, 0, comments))
+		votes, views := 0, 0
+		a.Find("div.caption-m span").Each(func(_ int, sp *goquery.Selection) {
+			if m := etolandStatRe.FindStringSubmatch(strings.TrimSpace(sp.Text())); m != nil {
+				n, _ := strconv.Atoi(strings.ReplaceAll(m[2], ",", ""))
+				if m[1] == "조회" {
+					views = n
+				} else {
+					votes = n
+				}
+			}
+		})
+		// 같은 글이 사이드바 순위 위젯(댓글 수만 있다)과 본문 목록에 둘 다 나온다.
+		// 먼저 나온 쪽이 이기면 조회·추천이 0 이 되므로 지표를 합친다.
+		if i, dup := seen[url]; dup {
+			p := &posts[i]
+			p.Votes, p.Views, p.Comments = max(p.Votes, votes), max(p.Views, views), max(p.Comments, comments)
+			return
+		}
+		seen[url] = len(posts)
+		posts = append(posts, s.makePost(title, url, votes, views, comments))
 	})
 
 	return posts

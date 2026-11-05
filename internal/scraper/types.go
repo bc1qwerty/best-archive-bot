@@ -68,7 +68,7 @@ type thresholds struct{ votes, views, comments int }
 // 목표로 그날 목록 스냅샷의 통과율에 비례해 잡은 값이다 — 배포 뒤 허브 건수로 다시 맞춘다.
 // 옆 숫자는 조정 전 하루 평균.
 var communityThresholds = map[string]thresholds{
-	"etoland":    {comments: 60},                            // 218 — 목록에 댓글 수만 있다
+	"etoland":    {votes: 40, views: 6000, comments: 60},    // 218
 	"ppomppu":    {votes: 100, views: 30000},                // 47
 	"bobaedream": {votes: 110, views: 20000, comments: 150}, // 33
 	"dcinside":   {votes: 80},                               // 16

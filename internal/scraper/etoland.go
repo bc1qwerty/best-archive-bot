@@ -2,10 +2,14 @@ package scraper
 
 import (
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 )
+
+var etolandCommentRe = regexp.MustCompile(`\((\d+)\)`)
 
 // EtolandScraper scrapes 이토랜드 인기글(hit) 목록.
 //
@@ -24,10 +28,12 @@ import (
 //   - 글 URL 이 이미 최종 주소다 → 예전의 `hit.php?bn_id=` → `board.php` 2단 해석이 불필요
 //     (요청 수가 행당 1건씩 줄어든다)
 //   - 목록에 **추천·조회가 실리지 않는다.** 댓글 수만 있는데 자릿수가 다르다
-//     (실측 69행: 최소 4 · 중앙 20 · 최대 111). `config.MinComments` 는 150 이라
-//     그 값으로 인기 판정을 하면 **전량이 걸러져 또 조용한 0행**이 된다.
-//     그래서 지표를 채우지 않는다 — `/hit/list` 자체가 사이트의 인기글 선별이고,
-//     지표가 없으면 `shouldInclude` 가 면제로 통과시킨다(`dataRequired` 는 false).
+//     (실측 69행: 최소 4 · 중앙 20 · 최대 111). 전역 `config.MinComments`(150)로
+//     판정하면 전량이 걸러지므로 `communityThresholds` 에 이토랜드 몫을 따로 둔다.
+//
+// 2026-11-06: 지표 없이 전량 면제로 통과시키던 동안 하루 218건, 전체의 57%를
+// 차지했다. 댓글 수를 채워 기준을 건다. 댓글 수를 한 행도 못 읽으면 전량이
+// 조용히 걸러지므로 레이아웃 오류로 올린다.
 type EtolandScraper struct {
 	baseScraper
 }
@@ -39,6 +45,7 @@ func NewEtolandScraper() *EtolandScraper {
 			communityName: "이토랜드",
 			baseURL:       "https://etoland.co.kr",
 			encoding:      "utf-8",
+			dataRequired:  true, // 댓글 0 인 행은 «지표 없음» 면제로 통과시키지 않는다
 		},
 	}
 }
@@ -50,7 +57,20 @@ func (s *EtolandScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 	if err != nil {
 		return nil, err
 	}
-	return s.finish(s.parseList(doc))
+	posts := s.parseList(doc)
+	if len(posts) > 0 && !anyComments(posts) {
+		return nil, &LayoutError{Community: s.communityName, Reason: "댓글 수를 한 행도 못 읽었다 — 레이아웃 변경 의심"}
+	}
+	return s.finish(posts)
+}
+
+func anyComments(posts []Post) bool {
+	for _, p := range posts {
+		if p.Comments > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // parseList 는 문서에서 인기글 행을 뽑는다. fetch 와 분리해 둔 것은 저장된
@@ -81,8 +101,12 @@ func (s *EtolandScraper) parseList(doc *goquery.Document) []Post {
 			return
 		}
 		seen[url] = true
-		// ⚠지표는 일부러 0 이다(위 주석). makePost 의 인자 순서: votes, views, comments.
-		posts = append(posts, s.makePost(title, url, 0, 0, 0))
+		// 댓글 수는 `(<!-- -->12<!-- -->)` 모양이다. 댓글이 없는 행엔 칸이 없다.
+		comments := 0
+		if m := etolandCommentRe.FindStringSubmatch(a.Find("span.comment-s").First().Text()); m != nil {
+			comments, _ = strconv.Atoi(m[1])
+		}
+		posts = append(posts, s.makePost(title, url, 0, 0, comments))
 	})
 
 	return posts

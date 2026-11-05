@@ -1,6 +1,7 @@
 package scraper
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -54,16 +55,35 @@ func TestEtolandParseList(t *testing.T) {
 		}
 	}
 
-	// ⚠지표를 채우면 안 된다. 새 목록에는 추천·조회가 없고 댓글 수만 있는데
-	//   그 값은 MinComments(150)보다 자릿수가 작아(실측 최대 111) 채우는 순간
-	//   shouldInclude 가 전량을 걸러 **또 조용한 0행**이 된다.
+	// 댓글 수를 읽어야 이토랜드 기준(communityThresholds)이 걸린다. fixture 4행의
+	// 실물 값이다 — 못 읽으면 FetchBestPosts 가 LayoutError 로 올린다.
+	var got []int
 	for _, p := range posts {
-		if p.Votes != 0 || p.Views != 0 || p.Comments != 0 {
-			t.Errorf("지표가 채워졌다 — 전량 필터링 위험: %+v", p)
+		got = append(got, p.Comments)
+		if p.Votes != 0 || p.Views != 0 {
+			t.Errorf("목록에 없는 지표가 채워졌다: %+v", p)
 		}
 	}
-	if kept := s.filterPosts(posts); len(kept) != len(posts) {
-		t.Errorf("필터 통과 %d/%d — 인기 판정이 전량을 걸렀다", len(kept), len(posts))
+	if want := []int{14, 12, 4, 5}; fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("댓글 수 = %v, want %v", got, want)
+	}
+	if !anyComments(posts) {
+		t.Error("anyComments=false — 레이아웃 경보가 오발한다")
+	}
+}
+
+func TestEtolandThreshold(t *testing.T) {
+	s := NewEtolandScraper()
+	min := communityThresholds["etoland"].comments
+	cases := []struct {
+		comments int
+		keep     bool
+	}{{min, true}, {min - 1, false}, {0, false}} // 0 = 댓글 칸 없음, 면제로 통과하면 안 된다
+	for _, c := range cases {
+		p := s.makePost("t", "https://etoland.co.kr/hit/etohumor07/view/t-1", 0, 0, c.comments)
+		if got := s.shouldInclude(p); got != c.keep {
+			t.Errorf("comments=%d: shouldInclude=%v, want %v", c.comments, got, c.keep)
+		}
 	}
 }
 

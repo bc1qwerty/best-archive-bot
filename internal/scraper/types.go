@@ -58,6 +58,33 @@ func (b *baseScraper) makePost(title, url string, votes, views, comments int) Po
 	}
 }
 
+// thresholds 는 인기 판정 기준이다. 0 인 지표는 판정에 쓰지 않는다.
+type thresholds struct{ votes, views, comments int }
+
+// communityThresholds 는 커뮤니티별 기준이다. 없으면 config 의 전역 기준을 쓴다.
+//
+// 목록마다 지표의 자릿수와 회전 속도가 달라 전역 기준 하나로는 하루 건수가
+// 0.2~218건으로 갈렸다(허브 실측 2026-10-23~11-05). 커뮤니티당 하루 15~30건을
+// 목표로 그날 목록 스냅샷의 통과율에 비례해 잡은 값이다 — 배포 뒤 허브 건수로 다시 맞춘다.
+// 옆 숫자는 조정 전 하루 평균.
+var communityThresholds = map[string]thresholds{
+	"etoland":    {comments: 60},                            // 218 — 목록에 댓글 수만 있다
+	"ppomppu":    {votes: 100, views: 30000},                // 47
+	"bobaedream": {votes: 110, views: 20000, comments: 150}, // 33
+	"dcinside":   {votes: 80},                               // 16
+	"inven":      {votes: 80, views: 15000, comments: 100},  // 8.8
+	"mlbpark":    {votes: 40, views: 10000},                 // 3.5 — 목록이 23행이라 더 늘지 않는다
+	"natepann":   {votes: 30, comments: 30},                 // 2.6
+	"82cook":     {views: 9000},                             // 1.0
+}
+
+func (b *baseScraper) thresholds() thresholds {
+	if t, ok := communityThresholds[b.community]; ok {
+		return t
+	}
+	return thresholds{config.MinVotes, config.MinViews, config.MinComments}
+}
+
 // shouldInclude checks popularity thresholds. ANY one metric passing is enough.
 func (b *baseScraper) shouldInclude(p Post) bool {
 	hasVotes := p.Votes > 0
@@ -70,13 +97,14 @@ func (b *baseScraper) shouldInclude(p Post) bool {
 		}
 		return true // data not provided → exempt
 	}
-	if hasVotes && p.Votes >= config.MinVotes {
+	t := b.thresholds()
+	if t.votes > 0 && hasVotes && p.Votes >= t.votes {
 		return true
 	}
-	if hasViews && p.Views >= config.MinViews {
+	if t.views > 0 && hasViews && p.Views >= t.views {
 		return true
 	}
-	if hasComments && p.Comments >= config.MinComments {
+	if t.comments > 0 && hasComments && p.Comments >= t.comments {
 		return true
 	}
 	return false
@@ -168,9 +196,13 @@ func (b *baseScraper) finish(posts []Post) ([]Post, error) {
 // 실패여도 error 로 올린다 — main.go 의 OnError 가 이 타입을 보고 등급을 되돌린다.
 type LayoutError struct {
 	Community string
+	Reason    string // 비면 «목록 셀렉터 0행»
 }
 
 func (e *LayoutError) Error() string {
+	if e.Reason != "" {
+		return fmt.Sprintf("%s: %s", e.Community, e.Reason)
+	}
 	return fmt.Sprintf("%s: 목록 셀렉터 0행 — 레이아웃 변경/안티봇 의심", e.Community)
 }
 

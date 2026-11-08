@@ -27,10 +27,24 @@ func NewBobaedreamScraper() *BobaedreamScraper {
 
 func (s *BobaedreamScraper) Name() string { return s.communityName }
 
+// bobaedreamServedEmpty 는 보배드림이 일부 IP 에 보내는 «목록만 비운» 페이지를 알아본다.
+// 2026-11-07 실측: 제목·메뉴·표 틀·머리글은 정상인데 `<tbody>` 만 비어 온다(72,850B,
+// 정상 121,516B). GHA 러너 IP 에 따라 갈리고(같은 러너면 매번 같다, curl 도 같다)
+// 다른 IP 는 403 을 받는다. 레이아웃 변경이 아니라 차단이라 LayoutError 로 올리지 않는다
+// (testdata/bobaedream-empty-tbody.html). 표 자체가 없으면 그대로 0행 LayoutError 다.
+func bobaedreamServedEmpty(doc *goquery.Document) bool {
+	table := doc.Find("table.clistTable02").First()
+	return table.Find("thead th").Length() > 0 && table.Find("tbody tr").Length() == 0
+}
+
 func (s *BobaedreamScraper) FetchBestPosts(client *http.Client) ([]Post, error) {
 	doc, err := fetchDocument(client, fmt.Sprintf("%s/list?code=best", s.baseURL), s.encoding, s.baseURL)
 	if err != nil {
 		return nil, err
+	}
+
+	if bobaedreamServedEmpty(doc) {
+		return nil, fmt.Errorf("%s: 목록 본문이 빈 페이지(표 틀만 옴 — IP 차단 추정)", s.communityName)
 	}
 
 	var posts []Post

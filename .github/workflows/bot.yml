@@ -61,7 +61,7 @@ jobs:
       BOOTSTRAP_DEDUP: ${{ github.event.inputs.bootstrap == 'true' && '1' || '' }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # 연속 실패 감지: 최근 5회 모두 실패면 워크플로우 자동 비활성화
       - name: Check consecutive failures
@@ -93,7 +93,7 @@ jobs:
       # go.mod uses `replace ../txid-bot-framework`. Stage the framework
       # as a sibling so the GHA build resolves it.
       - name: Checkout framework
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: bc1qwerty/txid-bot-framework
           path: txid-bot-framework-checkout
@@ -111,7 +111,7 @@ jobs:
         id: fwrev
         run: echo "sha=$(git -C ../txid-bot-framework rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           # ⚠ 2026-09-16: '1.24' → '1.26'. 선언이 **거짓이었고 그 대가가 실제 취약점이었다.**
           #   go.mod 가 `go 1.25.0` 이라 Go 가 자동 승격해 실제로는 go1.25.0 으로 빌드됐다
@@ -153,7 +153,7 @@ jobs:
 
       - name: Restore DB cache
         id: restore-db
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           # Include the WAL sidecars so dedup state survives even if a run
           # exits before its checkpoint folds the WAL into the main .db.
@@ -228,7 +228,7 @@ jobs:
 
       - name: Save DB cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: |
             data/posts.db

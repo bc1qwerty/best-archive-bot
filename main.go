@@ -66,6 +66,12 @@ const (
 	hubChannel = "best-archive"
 )
 
+// sameTitleDistinct: 제목이 같아도 별개 글인 커뮤니티. 여기서는 같은 커뮤니티 안의
+// 같은 제목을 거르지 않는다(다른 커뮤니티와의 중복은 그대로 거른다).
+// 2026-11-17 실측(30일): 이토랜드는 «아이브 장원영» 32건처럼 인물 이름만 제목인
+// 별개 글이 70종 넘게 반복됐고, 나머지 커뮤니티의 같은 제목은 재등록이었다.
+var sameTitleDistinct = map[string]bool{"이토랜드": true}
+
 // ArchiveFormatter renders a community best-post as Telegram HTML.
 type ArchiveFormatter struct{}
 
@@ -162,7 +168,7 @@ func main() {
 	// 커뮤니티당 3건은 «아직 안 보낸 글» 중에서 고른다(interleave.go IsSeen 주석).
 	// 키는 러너가 쓰는 것과 같아야 한다 — 하위 소스 스탬프가 없으므로 소스 이름이다.
 	interleaved.IsSeen = func(id string) (bool, error) { return st.IsSeen(interleaved.Name(), id) }
-	// 다른 커뮤니티가 최근에 보낸 제목은 건너뛴다(persist.Titles 주석). 걸린 글은
+	// 최근에 나간 제목은 건너뛴다(persist.Titles 주석). 걸린 글은
 	// seen 으로 찍는다 — 안 찍으면 기간이 지난 뒤 며칠 묵은 글로 뒤늦게 나간다.
 	titles, err := persist.OpenTitles(st.DB())
 	if err != nil {
@@ -171,15 +177,15 @@ func main() {
 	if err := titles.Cleanup(titleDedupWindow); err != nil {
 		log.Printf("title cleanup warning: %v", err)
 	}
-	interleaved.SentElsewhere = func(key string, it core.Item) bool {
-		dup, err := titles.SentElsewhere(key, it.Category, titleDedupWindow)
+	interleaved.DupTitle = func(key string, it core.Item) bool {
+		dup, err := titles.Duplicate(key, it.Category, it.ID, !sameTitleDistinct[it.Category], titleDedupWindow)
 		if err != nil || !dup {
 			return false
 		}
 		if err := st.MarkSeen(interleaved.Name(), it.ID); err != nil {
 			log.Printf("dup-title mark seen warning (item=%s): %v", it.ID, err)
 		}
-		log.Printf("[%s] 다른 커뮤니티가 보낸 제목이라 건너뜀: %s", it.Category, it.Title)
+		log.Printf("[%s] 이미 나간 제목이라 건너뜀: %s", it.Category, it.Title)
 		return true
 	}
 	// 부트스트랩은 지금 목록을 통째로 seen 으로 찍어야 한다. 3건만 찍으면 나머지
@@ -206,7 +212,7 @@ func main() {
 		BootstrapMode:     os.Getenv("BOOTSTRAP_DEDUP") == "1",
 		OnNewItem: func(ctx context.Context, item core.Item) error {
 			if key := source.TitleKey(item.Title); key != "" {
-				if err := titles.Record(key, item.Category); err != nil {
+				if err := titles.Record(key, item.Category, item.ID); err != nil {
 					log.Printf("title record warning (item=%s): %v", item.ID, err)
 				}
 			}

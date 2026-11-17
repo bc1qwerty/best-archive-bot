@@ -31,10 +31,10 @@ type InterleavingSource struct {
 	//   통과 19건에 하루 4건, 인벤·네이트판은 기준을 낮춰도 건수가 그대로였다.
 	//   판정 오류는 «안 본 글» 로 친다(러너가 한 번 더 걸러 준다).
 	IsSeen func(id string) (bool, error)
-	// SentElsewhere reports whether another community already sent a post
-	// with this title key (TitleKey) on an earlier run. Such items are
-	// dropped before the MaxPerSource cut, like seen ones.
-	SentElsewhere func(titleKey string, it core.Item) bool
+	// DupTitle reports whether a post with this title key (TitleKey) was
+	// already sent on an earlier run. Such items are dropped before the
+	// MaxPerSource cut, like seen ones.
+	DupTitle func(titleKey string, it core.Item) bool
 }
 
 func NewInterleavingSource(sources ...core.Source) *InterleavingSource {
@@ -60,7 +60,7 @@ func (s *InterleavingSource) Fetch(ctx context.Context) ([]core.Item, error) {
 		if err != nil {
 			errs = append(errs, fmt.Errorf("source %s: %w", src.Name(), err))
 		}
-		if s.IsSeen != nil || s.SentElsewhere != nil {
+		if s.IsSeen != nil || s.DupTitle != nil {
 			fresh := make([]core.Item, 0, len(items))
 			for _, it := range items {
 				if s.IsSeen != nil {
@@ -68,8 +68,8 @@ func (s *InterleavingSource) Fetch(ctx context.Context) ([]core.Item, error) {
 						continue
 					}
 				}
-				if s.SentElsewhere != nil {
-					if key := TitleKey(it.Title); key != "" && s.SentElsewhere(key, it) {
+				if s.DupTitle != nil {
+					if key := TitleKey(it.Title); key != "" && s.DupTitle(key, it) {
 						continue
 					}
 				}

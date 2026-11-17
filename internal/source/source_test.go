@@ -128,7 +128,7 @@ func TestInterleave_CapsAfterDroppingSeen(t *testing.T) {
 	}
 }
 
-func TestInterleave_DropsTitlesSentElsewhere(t *testing.T) {
+func TestInterleave_DropsDupTitles(t *testing.T) {
 	// 다른 커뮤니티가 앞선 실행에서 보낸 제목은 3건 자리를 차지하지 않고 빠진다.
 	a := fakeSource{name: "A", items: []core.Item{
 		{ID: "a1", Title: "[펌] 이미 나간 글!", Category: "A"}, {ID: "a2", Title: "A2", Category: "A"},
@@ -136,7 +136,7 @@ func TestInterleave_DropsTitlesSentElsewhere(t *testing.T) {
 	}}
 	src := NewInterleavingSource(a)
 	src.MaxPerSource = 3
-	src.SentElsewhere = func(key string, it core.Item) bool {
+	src.DupTitle = func(key string, it core.Item) bool {
 		return key == "펌이미나간글" && it.Category == "A"
 	}
 	out, err := src.Fetch(context.Background())

@@ -52,6 +52,9 @@ const (
 	// this keeps its hottest few and prevents one busy community (e.g. a game
 	// board mid-drama) from monopolizing a batch.
 	maxPerCommunity = 3
+	// titleDedupWindow: 같은 제목을 다른 커뮤니티가 보낸 지 이 시간 안이면 건너뛴다.
+	// 2026-11-17 실측에서 커뮤니티 간 재등장은 53시간 안에 몰려 있었다.
+	titleDedupWindow = 72 * time.Hour
 	// hubChannel is the txid notification-hub channel slug. It is NOT the
 	// Telegram chat id: the hub keys notifications by logical channel,
 	// while Telegram delivery is handled separately by the framework
@@ -156,6 +159,26 @@ func main() {
 	// 커뮤니티당 3건은 «아직 안 보낸 글» 중에서 고른다(interleave.go IsSeen 주석).
 	// 키는 러너가 쓰는 것과 같아야 한다 — 하위 소스 스탬프가 없으므로 소스 이름이다.
 	interleaved.IsSeen = func(id string) (bool, error) { return st.IsSeen(interleaved.Name(), id) }
+	// 다른 커뮤니티가 최근에 보낸 제목은 건너뛴다(persist.Titles 주석). 걸린 글은
+	// seen 으로 찍는다 — 안 찍으면 기간이 지난 뒤 며칠 묵은 글로 뒤늦게 나간다.
+	titles, err := persist.OpenTitles(st.DB())
+	if err != nil {
+		log.Fatalf("title store open: %v", err)
+	}
+	if err := titles.Cleanup(titleDedupWindow); err != nil {
+		log.Printf("title cleanup warning: %v", err)
+	}
+	interleaved.SentElsewhere = func(key string, it core.Item) bool {
+		dup, err := titles.SentElsewhere(key, it.Category, titleDedupWindow)
+		if err != nil || !dup {
+			return false
+		}
+		if err := st.MarkSeen(interleaved.Name(), it.ID); err != nil {
+			log.Printf("dup-title mark seen warning (item=%s): %v", it.ID, err)
+		}
+		log.Printf("[%s] 다른 커뮤니티가 보낸 제목이라 건너뜀: %s", it.Category, it.Title)
+		return true
+	}
 	// 부트스트랩은 지금 목록을 통째로 seen 으로 찍어야 한다. 3건만 찍으면 나머지
 	// 통과 글 전부가 다음 실행부터 새 글로 쏟아진다.
 	if os.Getenv("BOOTSTRAP_DEDUP") == "1" {
@@ -179,6 +202,11 @@ func main() {
 		ArchiveRetainDays: 30,
 		BootstrapMode:     os.Getenv("BOOTSTRAP_DEDUP") == "1",
 		OnNewItem: func(ctx context.Context, item core.Item) error {
+			if key := source.TitleKey(item.Title); key != "" {
+				if err := titles.Record(key, item.Category); err != nil {
+					log.Printf("title record warning (item=%s): %v", item.ID, err)
+				}
+			}
 			return notifyhub.Push(notifyhub.Payload{
 				ChannelID: hubChannel,
 				Title:     item.Title,

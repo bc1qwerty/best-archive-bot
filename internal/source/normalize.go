@@ -72,12 +72,12 @@ func NormalizeURL(raw string) string {
 	return s
 }
 
-// normalizeTitleKey reduces a title to letters and digits only (lowercased)
+// TitleKey reduces a title to letters and digits only (lowercased)
 // so exact cross-posts — the same headline copied to multiple communities —
 // collapse to one key regardless of bracket tags, spacing, or punctuation.
 // It is intentionally conservative: it matches identical headlines, not
 // merely same-topic ones, to avoid dropping distinct posts.
-func normalizeTitleKey(title string) string {
+func TitleKey(title string) string {
 	var b strings.Builder
 	for _, r := range title {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {

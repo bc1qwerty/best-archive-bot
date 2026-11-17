@@ -50,17 +50,17 @@ func TestNormalizeURL(t *testing.T) {
 
 func TestNormalizeTitleKey(t *testing.T) {
 	// Bracket tags, spacing, and punctuation differences must collapse.
-	a := normalizeTitleKey("[더쿠] 인기글  가수 청하!!")
-	b := normalizeTitleKey("가수 청하")
-	if normalizeTitleKey("가수 청하") == "" {
+	a := TitleKey("[더쿠] 인기글  가수 청하!!")
+	b := TitleKey("가수 청하")
+	if TitleKey("가수 청하") == "" {
 		t.Fatal("expected non-empty key for hangul title")
 	}
 	if a == b {
 		t.Errorf("distinct headlines collapsed: %q vs %q", a, b)
 	}
 	// Same headline with different decoration collapses.
-	x := normalizeTitleKey("배우 하영 ㅁㅊ")
-	y := normalizeTitleKey("배우 하영, ㅁㅊ!")
+	x := TitleKey("배우 하영 ㅁㅊ")
+	y := TitleKey("배우 하영, ㅁㅊ!")
 	if x != y {
 		t.Errorf("same headline did not collapse: %q vs %q", x, y)
 	}
@@ -125,6 +125,30 @@ func TestInterleave_CapsAfterDroppingSeen(t *testing.T) {
 	}
 	if got != "a4 a5 a6 " {
 		t.Errorf("got %q, want the next three unseen (a4 a5 a6)", got)
+	}
+}
+
+func TestInterleave_DropsTitlesSentElsewhere(t *testing.T) {
+	// 다른 커뮤니티가 앞선 실행에서 보낸 제목은 3건 자리를 차지하지 않고 빠진다.
+	a := fakeSource{name: "A", items: []core.Item{
+		{ID: "a1", Title: "[펌] 이미 나간 글!", Category: "A"}, {ID: "a2", Title: "A2", Category: "A"},
+		{ID: "a3", Title: "A3", Category: "A"}, {ID: "a4", Title: "A4", Category: "A"},
+	}}
+	src := NewInterleavingSource(a)
+	src.MaxPerSource = 3
+	src.SentElsewhere = func(key string, it core.Item) bool {
+		return key == "펌이미나간글" && it.Category == "A"
+	}
+	out, err := src.Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("Fetch error: %v", err)
+	}
+	got := ""
+	for _, it := range out {
+		got += it.ID + " "
+	}
+	if got != "a2 a3 a4 " {
+		t.Errorf("got %q, want a2 a3 a4", got)
 	}
 }
 

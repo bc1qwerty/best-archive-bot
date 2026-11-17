@@ -4,11 +4,6 @@ communities:
     url: "https://gall.dcinside.com/board/lists/?id=dcbest"
     enabled: true
 
-  fmkorea:
-    name: "에펨코리아"
-    url: "https://www.fmkorea.com/best"
-    enabled: true
-
   clien:
     name: "클리앙"
     url: "https://www.clien.net/service/group/clien_all?&od=T33"

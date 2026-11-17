@@ -42,10 +42,13 @@ const (
 	//   둔다 — 평상시엔 발화하지 않으면서, MaxPerSource 가 풀리는 사고
 	//   (커뮤니티당 최대 20건 → 240건)에는 여전히 브레이크로 남는다.
 	//
-	//   ⚠발송량이 늘어도 텔레그램 한도에 눌려 유실되지는 않는다. 실측 발송
-	//   속도는 ~1건/초(2026-09-13 10건 9.6초, 429 0회)라 40건도 runTimeout 5분
-	//   안이고, 429 가 나도 프레임워크가 retry_after 를 따라 재시도한 뒤
-	//   실패분은 seen 처리를 미뤄 다음 폴에서 다시 집는다.
+	//   ⚠한 실행에 실제로 나가는 것은 20건 안팎이다. 21번째 근처부터 텔레그램이
+	//   429(Too Many Requests: retry after N)를 내고 허브도 같은 시점에 429
+	//   (Too many verify requests)를 낸다 — 2026-11-17 실측: 후보 32건인 실행
+	//   두 번 모두 20건 발송, 12건 보류. 10건일 때(2026-09-13, 9.6초)는 429 가
+	//   없었다. 보류분은 seen 처리가 미뤄져 다음 폴에서 다시 나가므로 바로
+	//   유실되지는 않지만, 같은 글이 5번 연속 보류되면 프레임워크가 포기한다.
+	//   후보가 계속 20건을 넘으면 그 길로 유실이 생긴다.
 	maxSendPerRun = 40
 	// maxPerCommunity caps how many posts a single community contributes to
 	// one run. Because each community's posts are popularity-sorted upstream,

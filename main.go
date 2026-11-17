@@ -153,6 +153,15 @@ func main() {
 	defer closeStore()
 	_ = st.Subscribe(config.ChatID)
 
+	// 커뮤니티당 3건은 «아직 안 보낸 글» 중에서 고른다(interleave.go IsSeen 주석).
+	// 키는 러너가 쓰는 것과 같아야 한다 — 하위 소스 스탬프가 없으므로 소스 이름이다.
+	interleaved.IsSeen = func(id string) (bool, error) { return st.IsSeen(interleaved.Name(), id) }
+	// 부트스트랩은 지금 목록을 통째로 seen 으로 찍어야 한다. 3건만 찍으면 나머지
+	// 통과 글 전부가 다음 실행부터 새 글로 쏟아진다.
+	if os.Getenv("BOOTSTRAP_DEDUP") == "1" {
+		interleaved.MaxPerSource = 0
+	}
+
 	// Set when a poll fetched nothing from any community; the process must
 	// then exit nonzero so the GHA failure alert and the consecutive-failure
 	// guard engage instead of the run ending green.

@@ -90,6 +90,7 @@ var communityThresholds = map[string]thresholds{
 	"mlbpark":    {votes: 40, views: 10000},                 // 3.5 — 목록이 23행이라 더 늘지 않는다
 	"natepann":   {votes: 20, views: 10000, comments: 20},   // 2.6
 	"cook82":     {views: 7000},                             // 1.0
+	"clien":      {votes: 20, views: 4000, comments: 50},    // 0.02 — 전역 기준(100/2만/150)에 목록 최고치(추천 21·조회 8,683)가 못 미쳤다. 11/17 스냅샷 20건 중 4건 통과
 	"humoruniv":  {votes: 300},                              // 0.2 — 주간 베스트라 목록이 거의 안 바뀐다. 전부 통과 수준
 }
 

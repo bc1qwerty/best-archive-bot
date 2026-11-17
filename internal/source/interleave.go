@@ -22,6 +22,15 @@ type InterleavingSource struct {
 	// fetch. 0 means no per-source cap (use the framework's global
 	// MaxItemsPerPoll instead).
 	MaxPerSource int
+	// IsSeen reports whether an item was already dispatched. When set, seen
+	// items are dropped BEFORE the MaxPerSource cut.
+	//
+	// ⚠ 이것 없이 자르면 «지금 가장 뜨거운 N개» 만 후보가 된다 — 그 N개가 이미 보낸
+	//   글이면 그 아래의 새 글은 영영 차례가 오지 않는다. 2026-11-17 실측: 웃긴대학은
+	//   기준 통과 20건인데 11일간 0건(주간 베스트라 상위 3개가 안 바뀐다), MLB파크는
+	//   통과 19건에 하루 4건, 인벤·네이트판은 기준을 낮춰도 건수가 그대로였다.
+	//   판정 오류는 «안 본 글» 로 친다(러너가 한 번 더 걸러 준다).
+	IsSeen func(id string) (bool, error)
 }
 
 func NewInterleavingSource(sources ...core.Source) *InterleavingSource {
@@ -46,6 +55,16 @@ func (s *InterleavingSource) Fetch(ctx context.Context) ([]core.Item, error) {
 		items, err := src.Fetch(ctx)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("source %s: %w", src.Name(), err))
+		}
+		if s.IsSeen != nil {
+			fresh := make([]core.Item, 0, len(items))
+			for _, it := range items {
+				if seen, serr := s.IsSeen(it.ID); serr == nil && seen {
+					continue
+				}
+				fresh = append(fresh, it)
+			}
+			items = fresh
 		}
 		if s.MaxPerSource > 0 && len(items) > s.MaxPerSource {
 			items = items[:s.MaxPerSource]

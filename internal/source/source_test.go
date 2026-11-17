@@ -101,6 +101,33 @@ func (f fakeSource) Fetch(context.Context) ([]core.Item, error) {
 	return f.items, f.err
 }
 
+func TestInterleave_CapsAfterDroppingSeen(t *testing.T) {
+	// 상위 3개를 이미 보냈으면 그 아래 새 글이 차례를 받아야 한다.
+	a := fakeSource{name: "A", items: []core.Item{
+		{ID: "a1", Title: "A1"}, {ID: "a2", Title: "A2"}, {ID: "a3", Title: "A3"},
+		{ID: "a4", Title: "A4"}, {ID: "a5", Title: "A5"}, {ID: "a6", Title: "A6"}, {ID: "a7", Title: "A7"},
+	}}
+	src := NewInterleavingSource(a)
+	src.MaxPerSource = 3
+	src.IsSeen = func(id string) (bool, error) {
+		if id == "a5" {
+			return false, context.DeadlineExceeded // 판정 오류는 안 본 글로 친다
+		}
+		return id == "a1" || id == "a2" || id == "a3", nil
+	}
+	out, err := src.Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("Fetch error: %v", err)
+	}
+	got := ""
+	for _, it := range out {
+		got += it.ID + " "
+	}
+	if got != "a4 a5 a6 " {
+		t.Errorf("got %q, want the next three unseen (a4 a5 a6)", got)
+	}
+}
+
 func TestInterleave_MaxPerSourceCaps(t *testing.T) {
 	// Source A is popularity-sorted upstream, so items are hottest-first.
 	a := fakeSource{name: "A", items: []core.Item{

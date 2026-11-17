@@ -44,7 +44,7 @@ go build -o best-archive-bot .
 - The workflow checks out `bc1qwerty/txid-bot-framework@main` as a sibling to satisfy the go.mod `replace`
 - Push to main = 자동 반영 (다음 cron 틱부터)
 - dedup 상태의 유일한 사본은 GHA 캐시(`data/posts.db*`) — 유실 감지·부트스트랩 로직은 bot.yml 주석 참조
-- Max 40 posts per run, max 3 per community per run (상한 초과분은 발송 없이 seen 처리돼 영구 유실 — main.go `maxSendPerRun` 주석 참조)
+- Max 40 posts per run, max 3 per community per run. 커뮤니티당 3건은 아직 안 보낸 글 중 인기순으로 고르고 나머지는 다음 실행으로 넘어간다(interleave.go `IsSeen`). 실행당 40건 상한을 넘긴 분량만 발송 없이 seen 처리돼 영구 유실 — main.go `maxSendPerRun` 주석 참조
 
 ## Status
 Active. GitHub Actions scheduled execution (acer/dell cron 시절은 종료).
